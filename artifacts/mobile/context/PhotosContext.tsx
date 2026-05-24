@@ -1,6 +1,37 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
+export interface CurvePoint { x: number; y: number; }
+
+export interface HslChannel { h: number; s: number; l: number; }
+
+export interface HslAdjustments {
+  red: HslChannel; orange: HslChannel; yellow: HslChannel; green: HslChannel;
+  aqua: HslChannel; blue: HslChannel; purple: HslChannel; magenta: HslChannel;
+}
+
+export interface CurveSet {
+  rgb: CurvePoint[]; r: CurvePoint[]; g: CurvePoint[]; b: CurvePoint[];
+}
+
+export const DEFAULT_HSL_CHANNEL: HslChannel = { h: 0, s: 0, l: 0 };
+
+export const DEFAULT_HSL: HslAdjustments = {
+  red: { ...DEFAULT_HSL_CHANNEL }, orange: { ...DEFAULT_HSL_CHANNEL },
+  yellow: { ...DEFAULT_HSL_CHANNEL }, green: { ...DEFAULT_HSL_CHANNEL },
+  aqua: { ...DEFAULT_HSL_CHANNEL }, blue: { ...DEFAULT_HSL_CHANNEL },
+  purple: { ...DEFAULT_HSL_CHANNEL }, magenta: { ...DEFAULT_HSL_CHANNEL },
+};
+
+export const DEFAULT_CURVE: CurvePoint[] = [{ x: 0, y: 0 }, { x: 1, y: 1 }];
+
+export const DEFAULT_CURVES: CurveSet = {
+  rgb: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+  r: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+  g: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+  b: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+};
+
 export interface PhotoAdjustments {
   brightness: number;
   contrast: number;
@@ -21,29 +52,64 @@ export interface PhotoAdjustments {
   rotation: 0 | 90 | 180 | 270;
   flipH: boolean;
   flipV: boolean;
+  exposure: number;
+  hue: number;
+  texture: number;
+  colorNoise: number;
+  sharpeningRadius: number;
+  sharpeningMasking: number;
+  toneMapping: number;
+  freeRotate: number;
+  splitHighlightsHue: number;
+  splitHighlightsSat: number;
+  splitShadowsHue: number;
+  splitShadowsSat: number;
+  levelsBlack: number;
+  levelsMidtone: number;
+  levelsWhite: number;
+  levelsOutBlack: number;
+  levelsOutWhite: number;
+  hsl: HslAdjustments;
+  curves: CurveSet;
+  cropAspect: string;
 }
 
 export const DEFAULT_ADJUSTMENTS: PhotoAdjustments = {
-  brightness: 0,
-  contrast: 0,
-  highlights: 0,
-  shadows: 0,
-  whites: 0,
-  blacks: 0,
-  saturation: 0,
-  vibrance: 0,
-  warmth: 0,
-  tint: 0,
-  sharpness: 0,
-  clarity: 0,
-  dehaze: 0,
-  noiseReduction: 0,
-  vignette: 0,
-  grain: 0,
-  rotation: 0,
-  flipH: false,
-  flipV: false,
+  brightness: 0, contrast: 0, highlights: 0, shadows: 0,
+  whites: 0, blacks: 0, saturation: 0, vibrance: 0,
+  warmth: 0, tint: 0, sharpness: 0, clarity: 0,
+  dehaze: 0, noiseReduction: 0, vignette: 0, grain: 0,
+  rotation: 0, flipH: false, flipV: false,
+  exposure: 0, hue: 0, texture: 0, colorNoise: 0,
+  sharpeningRadius: 25, sharpeningMasking: 0, toneMapping: 0,
+  freeRotate: 0,
+  splitHighlightsHue: 0, splitHighlightsSat: 0,
+  splitShadowsHue: 0, splitShadowsSat: 0,
+  levelsBlack: 0, levelsMidtone: 0, levelsWhite: 0,
+  levelsOutBlack: 0, levelsOutWhite: 0,
+  hsl: {
+    red: { h: 0, s: 0, l: 0 }, orange: { h: 0, s: 0, l: 0 },
+    yellow: { h: 0, s: 0, l: 0 }, green: { h: 0, s: 0, l: 0 },
+    aqua: { h: 0, s: 0, l: 0 }, blue: { h: 0, s: 0, l: 0 },
+    purple: { h: 0, s: 0, l: 0 }, magenta: { h: 0, s: 0, l: 0 },
+  },
+  curves: {
+    rgb: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+    r: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+    g: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+    b: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+  },
+  cropAspect: 'free',
 };
+
+function migrateAdjustments(raw: Partial<PhotoAdjustments>): PhotoAdjustments {
+  return {
+    ...DEFAULT_ADJUSTMENTS,
+    ...raw,
+    hsl: raw.hsl ? { ...DEFAULT_ADJUSTMENTS.hsl, ...raw.hsl } : DEFAULT_ADJUSTMENTS.hsl,
+    curves: raw.curves ? { ...DEFAULT_ADJUSTMENTS.curves, ...raw.curves } : DEFAULT_ADJUSTMENTS.curves,
+  };
+}
 
 export interface Photo {
   id: string;
@@ -53,7 +119,12 @@ export interface Photo {
   height?: number;
   favorited?: boolean;
   adjustments?: PhotoAdjustments;
+  rating?: number;
+  colorLabel?: string | null;
+  tags?: string[];
 }
+
+export type PhotoChanges = Partial<Pick<Photo, 'adjustments' | 'rating' | 'colorLabel' | 'tags' | 'favorited'>>;
 
 interface PhotosContextValue {
   photos: Photo[];
@@ -61,7 +132,7 @@ interface PhotosContextValue {
   deletePhoto: (id: string) => Promise<void>;
   deletePhotos: (ids: string[]) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
-  updatePhoto: (id: string, changes: Partial<Pick<Photo, "adjustments">>) => Promise<void>;
+  updatePhoto: (id: string, changes: PhotoChanges) => Promise<void>;
   loading: boolean;
 }
 
@@ -99,6 +170,11 @@ export function PhotosProvider({ children }: { children: React.ReactNode }) {
 
         let initial: Photo[] = raw ? JSON.parse(raw) : [];
 
+        initial = initial.map((p) => ({
+          ...p,
+          adjustments: p.adjustments ? migrateAdjustments(p.adjustments) : undefined,
+        }));
+
         if (!seeded) {
           initial = [...SEED_PHOTOS, ...initial];
           await Promise.all([
@@ -124,10 +200,7 @@ export function PhotosProvider({ children }: { children: React.ReactNode }) {
     async (uri: string, width?: number, height?: number) => {
       const photo: Photo = {
         id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-        uri,
-        timestamp: Date.now(),
-        width,
-        height,
+        uri, timestamp: Date.now(), width, height,
       };
       setPhotos((prev) => {
         const next = [photo, ...prev];
@@ -175,7 +248,7 @@ export function PhotosProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updatePhoto = useCallback(
-    async (id: string, changes: Partial<Pick<Photo, "adjustments">>) => {
+    async (id: string, changes: PhotoChanges) => {
       setPhotos((prev) => {
         const next = prev.map((p) => (p.id === id ? { ...p, ...changes } : p));
         persist(next);

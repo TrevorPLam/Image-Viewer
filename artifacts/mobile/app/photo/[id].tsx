@@ -10,9 +10,11 @@ import {
   ListRenderItemInfo,
   Platform,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
   ViewToken,
 } from "react-native";
@@ -24,15 +26,53 @@ import { buildPhotoStyle } from "@/utils/photoStyle";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+const COLOR_LABELS: { key: string; color: string; label: string }[] = [
+  { key: "red",    color: "#ff453a", label: "Red" },
+  { key: "orange", color: "#ff9f0a", label: "Orange" },
+  { key: "yellow", color: "#ffd60a", label: "Yellow" },
+  { key: "green",  color: "#30d158", label: "Green" },
+  { key: "blue",   color: "#0a84ff", label: "Blue" },
+  { key: "purple", color: "#bf5af2", label: "Purple" },
+];
+
+function StarRating({ rating, onChange }: { rating: number; onChange: (v: number) => void }) {
+  return (
+    <View style={rSt.row}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Pressable
+          key={star}
+          onPress={() => onChange(rating === star ? 0 : star)}
+          hitSlop={6}
+          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+        >
+          <Feather
+            name="star"
+            size={22}
+            color={star <= rating ? "#ffd60a" : "rgba(255,255,255,0.25)"}
+            style={star <= rating ? rSt.starFilled : undefined}
+          />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+const rSt = StyleSheet.create({
+  row: { flexDirection: "row", gap: 6, alignItems: "center" },
+  starFilled: {},
+});
+
 export default function PhotoDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { photos, loading, deletePhoto, toggleFavorite } = usePhotos();
+  const { photos, loading, deletePhoto, toggleFavorite, updatePhoto } = usePhotos();
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
   const [showInfo, setShowInfo] = useState(false);
   const [currentId, setCurrentId] = useState(id ?? "");
+  const [editingTags, setEditingTags] = useState(false);
+  const [tagInput, setTagInput] = useState("");
 
   const initialIndex = useMemo(
     () => Math.max(photos.findIndex((p) => p.id === id), 0),
@@ -119,6 +159,36 @@ export default function PhotoDetailScreen() {
     router.push({ pathname: "/edit/[id]", params: { id: currentId } });
   };
 
+  const handleRating = async (rating: number) => {
+    if (Platform.OS !== "web") {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await updatePhoto(currentId, { rating });
+  };
+
+  const handleColorLabel = async (label: string | null) => {
+    const next = currentPhoto?.colorLabel === label ? null : label;
+    if (Platform.OS !== "web") {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await updatePhoto(currentId, { colorLabel: next });
+  };
+
+  const handleAddTag = async () => {
+    const tag = tagInput.trim();
+    if (!tag || !currentPhoto) return;
+    const existing = currentPhoto.tags ?? [];
+    if (existing.includes(tag)) { setTagInput(""); return; }
+    await updatePhoto(currentId, { tags: [...existing, tag] });
+    setTagInput("");
+  };
+
+  const handleRemoveTag = async (tag: string) => {
+    if (!currentPhoto) return;
+    const next = (currentPhoto.tags ?? []).filter((t) => t !== tag);
+    await updatePhoto(currentId, { tags: next });
+  };
+
   useEffect(() => {
     if (!loading && photos.length === 0) {
       if (router.canGoBack()) router.back();
@@ -159,6 +229,11 @@ export default function PhotoDetailScreen() {
   }
 
   const isFav = currentPhoto?.favorited ?? false;
+  const rating = currentPhoto?.rating ?? 0;
+  const colorLabel = currentPhoto?.colorLabel ?? null;
+  const tags = currentPhoto?.tags ?? [];
+
+  const activeLabel = COLOR_LABELS.find((l) => l.key === colorLabel);
 
   return (
     <View style={styles.container}>
@@ -190,75 +265,115 @@ export default function PhotoDetailScreen() {
           <Feather name="chevron-left" size={28} color="#fff" />
         </Pressable>
 
-        <Text style={styles.counter}>
-          {currentIndex + 1} / {photos.length}
-        </Text>
+        <View style={styles.topCenter}>
+          <Text style={styles.counter}>
+            {currentIndex + 1} / {photos.length}
+          </Text>
+          {activeLabel && (
+            <View style={[styles.labelDot, { backgroundColor: activeLabel.color }]} />
+          )}
+          {rating > 0 && (
+            <View style={styles.ratingBadge}>
+              <Feather name="star" size={10} color="#ffd60a" />
+              <Text style={styles.ratingBadgeText}>{rating}</Text>
+            </View>
+          )}
+        </View>
 
         <View style={styles.topRight}>
-          <Pressable
-            onPress={handleToggleFavorite}
-            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
-            hitSlop={12}
-          >
-            <Feather
-              name="heart"
-              size={20}
-              color={isFav ? "#ff2d55" : "#fff"}
-            />
+          <Pressable onPress={handleToggleFavorite} style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]} hitSlop={12}>
+            <Feather name="heart" size={20} color={isFav ? "#ff2d55" : "#fff"} />
           </Pressable>
-          <Pressable
-            onPress={handleShare}
-            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
-            hitSlop={12}
-          >
+          <Pressable onPress={handleShare} style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]} hitSlop={12}>
             <Feather name="share" size={20} color="#fff" />
           </Pressable>
-          <Pressable
-            onPress={handleEdit}
-            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
-            hitSlop={12}
-          >
+          <Pressable onPress={handleEdit} style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]} hitSlop={12}>
             <Feather name="sliders" size={20} color="#fff" />
           </Pressable>
-          <Pressable
-            onPress={handleDelete}
-            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
-            hitSlop={12}
-          >
+          <Pressable onPress={handleDelete} style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]} hitSlop={12}>
             <Feather name="trash-2" size={20} color={colors.destructive} />
           </Pressable>
         </View>
       </View>
 
       {showInfo && currentPhoto && (
-        <View
-          style={[
-            styles.infoBar,
-            {
-              backgroundColor: "rgba(0,0,0,0.72)",
-              paddingBottom: bottomInset + 16,
-            },
-          ]}
-        >
-          <View style={styles.infoRow}>
-            {isFav && (
-              <Feather name="heart" size={14} color="#ff2d55" />
-            )}
-            <Text style={styles.infoText}>
-              {new Date(currentPhoto.timestamp).toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
+        <View style={[styles.infoBar, { paddingBottom: bottomInset + 8 }]}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <View style={styles.infoRow}>
+              {isFav && <Feather name="heart" size={14} color="#ff2d55" />}
+              <Text style={styles.infoText}>
+                {new Date(currentPhoto.timestamp).toLocaleDateString("en-US", {
+                  weekday: "long", year: "numeric", month: "long", day: "numeric",
+                })}
+              </Text>
+            </View>
+            <Text style={styles.infoSubtext}>
+              {new Date(currentPhoto.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
             </Text>
-          </View>
-          <Text style={styles.infoSubtext}>
-            {new Date(currentPhoto.timestamp).toLocaleTimeString("en-US", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </Text>
+
+            <View style={styles.divider} />
+
+            {/* Star Rating */}
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Rating</Text>
+              <StarRating rating={rating} onChange={handleRating} />
+            </View>
+
+            {/* Color Label */}
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Label</Text>
+              <View style={styles.labelsRow}>
+                {COLOR_LABELS.map(({ key, color }) => (
+                  <Pressable
+                    key={key}
+                    onPress={() => handleColorLabel(key)}
+                    style={[
+                      styles.labelCircle,
+                      { backgroundColor: color },
+                      colorLabel === key && styles.labelCircleActive,
+                    ]}
+                    hitSlop={6}
+                  />
+                ))}
+                {colorLabel && (
+                  <Pressable onPress={() => handleColorLabel(null)} hitSlop={8} style={styles.clearLabel}>
+                    <Feather name="x" size={12} color="rgba(255,255,255,0.5)" />
+                  </Pressable>
+                )}
+              </View>
+            </View>
+
+            {/* Tags */}
+            <View style={styles.tagsSection}>
+              <Text style={styles.metaLabel}>Tags</Text>
+              <View style={styles.tagsWrap}>
+                {tags.map((tag) => (
+                  <Pressable key={tag} onPress={() => handleRemoveTag(tag)} style={styles.tagChip}>
+                    <Text style={styles.tagText}>{tag}</Text>
+                    <Feather name="x" size={10} color="rgba(255,255,255,0.5)" />
+                  </Pressable>
+                ))}
+                {editingTags ? (
+                  <TextInput
+                    style={styles.tagInput}
+                    value={tagInput}
+                    onChangeText={setTagInput}
+                    placeholder="Add tag…"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    returnKeyType="done"
+                    autoFocus
+                    onSubmitEditing={handleAddTag}
+                    onBlur={() => { setEditingTags(false); setTagInput(""); }}
+                  />
+                ) : (
+                  <Pressable onPress={() => setEditingTags(true)} style={styles.addTagBtn}>
+                    <Feather name="plus" size={12} color="rgba(255,255,255,0.4)" />
+                    <Text style={styles.addTagLabel}>Add</Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          </ScrollView>
         </View>
       )}
     </View>
@@ -266,74 +381,70 @@ export default function PhotoDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
+  container: { flex: 1, backgroundColor: "#000" },
   slide: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    alignItems: "center",
-    justifyContent: "center",
+    width: SCREEN_WIDTH, height: SCREEN_HEIGHT,
+    alignItems: "center", justifyContent: "center",
   },
-  imageWrap: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-  },
-  image: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-  },
+  imageWrap: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT },
+  image: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT },
   topBar: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingBottom: 12,
+    position: "absolute", top: 0, left: 0, right: 0,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 12, paddingBottom: 12,
   },
-  counter: {
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 15,
-    fontFamily: "Inter_500Medium",
+  topCenter: {
+    flexDirection: "row", alignItems: "center", gap: 6,
   },
-  topRight: {
-    flexDirection: "row",
-    gap: 4,
+  counter: { color: "rgba(255,255,255,0.85)", fontSize: 15, fontFamily: "Inter_500Medium" },
+  labelDot: { width: 10, height: 10, borderRadius: 5 },
+  ratingBadge: {
+    flexDirection: "row", alignItems: "center", gap: 2,
+    backgroundColor: "rgba(0,0,0,0.4)", borderRadius: 10,
+    paddingHorizontal: 6, paddingVertical: 2,
   },
+  ratingBadgeText: { color: "#ffd60a", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  topRight: { flexDirection: "row", gap: 4 },
   iconBtn: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    width: 36, height: 36,
+    alignItems: "center", justifyContent: "center",
+    borderRadius: 18, backgroundColor: "rgba(0,0,0,0.4)",
   },
   infoBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    gap: 4,
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    paddingHorizontal: 20, paddingTop: 16,
+    maxHeight: SCREEN_HEIGHT * 0.4,
+    borderTopLeftRadius: 16, borderTopRightRadius: 16,
   },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  infoText: { color: "#fff", fontSize: 16, fontFamily: "Inter_500Medium" },
+  infoSubtext: { color: "rgba(255,255,255,0.6)", fontSize: 14, fontFamily: "Inter_400Regular", marginTop: 2 },
+  divider: { height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 14 },
+  metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  metaLabel: { color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_500Medium", letterSpacing: 0.5, textTransform: "uppercase" },
+  labelsRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+  labelCircle: { width: 22, height: 22, borderRadius: 11, opacity: 0.7 },
+  labelCircleActive: { opacity: 1, borderWidth: 2, borderColor: "#fff" },
+  clearLabel: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
+  tagsSection: { marginBottom: 8 },
+  tagsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  tagChip: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 5,
   },
-  infoText: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Inter_500Medium",
+  tagText: { color: "rgba(255,255,255,0.8)", fontSize: 12, fontFamily: "Inter_400Regular" },
+  tagInput: {
+    backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 5,
+    color: "#fff", fontSize: 12, minWidth: 80,
   },
-  infoSubtext: {
-    color: "rgba(255,255,255,0.6)",
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
+  addTagBtn: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 10,
+    paddingHorizontal: 8, paddingVertical: 5,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", borderStyle: "dashed",
   },
+  addTagLabel: { color: "rgba(255,255,255,0.4)", fontSize: 12, fontFamily: "Inter_400Regular" },
 });
