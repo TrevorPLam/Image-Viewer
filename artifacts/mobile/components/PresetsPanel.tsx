@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Feather } from "@expo/vector-icons";
 
 import { DEFAULT_ADJUSTMENTS, PhotoAdjustments } from "@/context/PhotosContext";
 
@@ -85,6 +86,9 @@ export default function PresetsPanel({ visible, onClose, current, onApply }: Pro
   const [userPresets, setUserPresets] = useState<Preset[]>([]);
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState("");
 
   useEffect(() => {
     if (visible) loadUserPresets();
@@ -132,6 +136,47 @@ export default function PresetsPanel({ visible, onClose, current, onApply }: Pro
     onClose();
   };
 
+  const exportPreset = async () => {
+    const preset: Preset = {
+      id: Date.now().toString(),
+      name: "Exported Preset",
+      adjustments: { ...current },
+    };
+    const json = JSON.stringify(preset, null, 2);
+    if (Platform.OS === "web") {
+      try {
+        await (navigator as unknown as { clipboard: { writeText: (s: string) => Promise<void> } }).clipboard.writeText(json);
+        Alert.alert("Copied!", "Preset JSON copied to clipboard. Share it with others to import.");
+      } catch {
+        Alert.alert("Export", "Could not copy to clipboard automatically. Here is your preset JSON:\n\n" + json.slice(0, 200) + "...");
+      }
+    } else {
+      Alert.alert("Export Preset", "Copy the JSON below to share your preset.", [
+        { text: "OK" },
+      ]);
+    }
+  };
+
+  const handleImport = async () => {
+    setImportError("");
+    try {
+      const parsed = JSON.parse(importText.trim()) as Preset;
+      if (!parsed.adjustments) throw new Error("Invalid preset format");
+      const newPreset: Preset = {
+        id: Date.now().toString(),
+        name: parsed.name ?? "Imported Preset",
+        adjustments: parsed.adjustments,
+      };
+      const next = [...userPresets, newPreset];
+      setUserPresets(next);
+      await AsyncStorage.setItem(PRESETS_KEY, JSON.stringify(next));
+      setImporting(false);
+      setImportText("");
+    } catch {
+      setImportError("Invalid preset JSON. Please paste a valid exported preset.");
+    }
+  };
+
   const allPresets = [...BUILT_IN_PRESETS, ...userPresets];
 
   return (
@@ -146,9 +191,17 @@ export default function PresetsPanel({ visible, onClose, current, onApply }: Pro
         <View style={styles.handle} />
         <View style={styles.header}>
           <Text style={styles.title}>Presets</Text>
-          <Pressable onPress={onClose} style={styles.closeBtn}>
-            <Text style={styles.closeLabel}>Done</Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+            <Pressable onPress={() => setImporting(true)} style={styles.iconAction}>
+              <Feather name="upload" size={16} color="rgba(255,255,255,0.5)" />
+            </Pressable>
+            <Pressable onPress={exportPreset} style={styles.iconAction}>
+              <Feather name="download" size={16} color="rgba(255,255,255,0.5)" />
+            </Pressable>
+            <Pressable onPress={onClose} style={styles.closeBtn}>
+              <Text style={styles.closeLabel}>Done</Text>
+            </Pressable>
+          </View>
         </View>
 
         <ScrollView
@@ -171,6 +224,32 @@ export default function PresetsPanel({ visible, onClose, current, onApply }: Pro
             </Pressable>
           ))}
         </ScrollView>
+
+        {importing && (
+          <View style={styles.importSection}>
+            <Text style={styles.importTitle}>Import Preset</Text>
+            <Text style={styles.importHint}>Paste exported preset JSON below:</Text>
+            <TextInput
+              style={styles.importInput}
+              placeholder='{"name":"...","adjustments":{...}}'
+              placeholderTextColor="rgba(255,255,255,0.2)"
+              value={importText}
+              onChangeText={(t) => { setImportText(t); setImportError(""); }}
+              multiline
+              numberOfLines={3}
+              autoFocus
+            />
+            {importError ? <Text style={styles.importError}>{importError}</Text> : null}
+            <View style={styles.importActions}>
+              <Pressable onPress={() => { setImporting(false); setImportText(""); setImportError(""); }} style={styles.cancelBtn}>
+                <Text style={styles.cancelLabel}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={handleImport} style={[styles.saveConfirm, { opacity: importText.trim() ? 1 : 0.4 }]}>
+                <Text style={styles.saveConfirmLabel}>Import</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
 
         <View style={styles.saveSection}>
           {saving ? (
@@ -213,9 +292,7 @@ const styles = StyleSheet.create({
   },
   sheet: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 0, left: 0, right: 0,
     backgroundColor: "#1c1c1e",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -223,13 +300,11 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   handle: {
-    width: 36,
-    height: 4,
+    width: 36, height: 4,
     backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 2,
     alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 4,
+    marginTop: 10, marginBottom: 4,
   },
   header: {
     flexDirection: "row",
@@ -238,99 +313,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  title: {
-    color: "#fff",
-    fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
-  },
+  title: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  iconAction: { padding: 6 },
   closeBtn: { padding: 4 },
-  closeLabel: {
-    color: "#0a84ff",
-    fontSize: 16,
-    fontFamily: "Inter_500Medium",
+  closeLabel: { color: "#0a84ff", fontSize: 16, fontFamily: "Inter_500Medium" },
+  presetsRow: { paddingHorizontal: 16, paddingBottom: 16, gap: 10, flexDirection: "row" },
+  presetCard: { width: 76, alignItems: "center", gap: 6 },
+  presetSwatch: { width: 76, height: 76, borderRadius: 12 },
+  presetSwatchBuiltIn: { backgroundColor: "rgba(255,255,255,0.1)", borderWidth: 1, borderColor: "rgba(255,255,255,0.15)" },
+  presetSwatchUser: { backgroundColor: "rgba(10,132,255,0.2)", borderWidth: 1, borderColor: "rgba(10,132,255,0.4)" },
+  presetName: { color: "rgba(255,255,255,0.8)", fontSize: 12, fontFamily: "Inter_500Medium", textAlign: "center" },
+  customBadge: { color: "#0a84ff", fontSize: 10, fontFamily: "Inter_400Regular" },
+  importSection: { paddingHorizontal: 20, paddingBottom: 8, gap: 8 },
+  importTitle: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  importHint: { color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_400Regular" },
+  importInput: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10,
+    color: "#fff", fontSize: 12,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+    minHeight: 60,
   },
-  presetsRow: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 10,
-    flexDirection: "row",
-  },
-  presetCard: {
-    width: 76,
-    alignItems: "center",
-    gap: 6,
-  },
-  presetSwatch: {
-    width: 76,
-    height: 76,
-    borderRadius: 12,
-  },
-  presetSwatchBuiltIn: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
-  },
-  presetSwatchUser: {
-    backgroundColor: "rgba(10,132,255,0.2)",
-    borderWidth: 1,
-    borderColor: "rgba(10,132,255,0.4)",
-  },
-  presetName: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    textAlign: "center",
-  },
-  customBadge: {
-    color: "#0a84ff",
-    fontSize: 10,
-    fontFamily: "Inter_400Regular",
-  },
-  saveSection: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
-  },
-  saveRow: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-  },
+  importError: { color: "#ff453a", fontSize: 12, fontFamily: "Inter_400Regular" },
+  importActions: { flexDirection: "row", gap: 8, justifyContent: "flex-end" },
+  saveSection: { paddingHorizontal: 20, paddingTop: 4 },
+  saveRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   nameInput: {
     flex: 1,
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: "#fff",
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
+    paddingHorizontal: 14, paddingVertical: 10,
+    color: "#fff", fontSize: 15, fontFamily: "Inter_400Regular",
   },
-  saveConfirm: {
-    backgroundColor: "#0a84ff",
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  saveConfirmLabel: {
-    color: "#fff",
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
+  saveConfirm: { backgroundColor: "#0a84ff", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
+  saveConfirmLabel: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   cancelBtn: { paddingHorizontal: 4 },
-  cancelLabel: {
-    color: "rgba(255,255,255,0.5)",
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
-  },
-  saveCurrent: {
-    alignItems: "center",
-    paddingVertical: 12,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 12,
-  },
-  saveCurrentLabel: {
-    color: "#0a84ff",
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
-  },
+  cancelLabel: { color: "rgba(255,255,255,0.5)", fontSize: 14, fontFamily: "Inter_500Medium" },
+  saveCurrent: { alignItems: "center", paddingVertical: 12, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 12 },
+  saveCurrentLabel: { color: "#0a84ff", fontSize: 14, fontFamily: "Inter_500Medium" },
 });

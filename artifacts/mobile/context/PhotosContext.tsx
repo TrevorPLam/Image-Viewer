@@ -50,6 +50,37 @@ export interface PhotoAdjustments {
   gradingHighlightsHue: number; gradingHighlightsSat: number; gradingHighlightsLum: number;
   // LUT
   lutName: string;
+  // §1 Perspective & Lens Correction
+  perspectiveV: number;
+  perspectiveH: number;
+  lensDistortion: number;
+  chromaticAberration: boolean;
+  defringe: number;
+  // §1 Manual Crop (normalized 0–1)
+  cropX: number; cropY: number; cropW: number; cropH: number;
+  // §3 Graduated Filter
+  graduatedFilterStrength: number;
+  graduatedFilterAngle: number;
+  graduatedFilterFeather: number;
+  // §3 Radial Filter
+  radialFilterStrength: number;
+  radialFilterFeather: number;
+  radialFilterInvert: boolean;
+  // §5 AI Denoise
+  aiDenoise: number;
+  // §8 AI Portrait
+  skinSmoothing: number;
+  // §7 Masks
+  maskBrushStrength: number;
+  maskGradientStrength: number;
+  maskRadialStrength: number;
+  maskLuminosityLow: number;
+  maskLuminosityHigh: number;
+  // §4 Color Replace
+  colorReplaceTargetHue: number;
+  colorReplaceRange: number;
+  colorReplaceHue: number;
+  colorReplaceSat: number;
 }
 
 export const DEFAULT_ADJUSTMENTS: PhotoAdjustments = {
@@ -71,6 +102,15 @@ export const DEFAULT_ADJUSTMENTS: PhotoAdjustments = {
   gradingMidtonesHue: 0, gradingMidtonesSat: 0, gradingMidtonesLum: 0,
   gradingHighlightsHue: 0, gradingHighlightsSat: 0, gradingHighlightsLum: 0,
   lutName: "none",
+  perspectiveV: 0, perspectiveH: 0,
+  lensDistortion: 0, chromaticAberration: false, defringe: 0,
+  cropX: 0, cropY: 0, cropW: 1, cropH: 1,
+  graduatedFilterStrength: 0, graduatedFilterAngle: 0, graduatedFilterFeather: 50,
+  radialFilterStrength: 0, radialFilterFeather: 50, radialFilterInvert: false,
+  aiDenoise: 0, skinSmoothing: 0,
+  maskBrushStrength: 0, maskGradientStrength: 0, maskRadialStrength: 0,
+  maskLuminosityLow: 0, maskLuminosityHigh: 100,
+  colorReplaceTargetHue: 0, colorReplaceRange: 30, colorReplaceHue: 0, colorReplaceSat: 0,
 };
 
 function migrateAdjustments(raw: Partial<PhotoAdjustments>): PhotoAdjustments {
@@ -82,6 +122,8 @@ function migrateAdjustments(raw: Partial<PhotoAdjustments>): PhotoAdjustments {
   };
 }
 
+export type FlagStatus = "pick" | "reject" | null;
+
 export interface Photo {
   id: string; uri: string; timestamp: number;
   width?: number; height?: number;
@@ -89,9 +131,10 @@ export interface Photo {
   rating?: number;
   colorLabel?: string | null;
   tags?: string[];
+  flag?: FlagStatus;
 }
 
-export type PhotoChanges = Partial<Pick<Photo, "adjustments" | "rating" | "colorLabel" | "tags" | "favorited">>;
+export type PhotoChanges = Partial<Pick<Photo, "adjustments" | "rating" | "colorLabel" | "tags" | "favorited" | "flag">>;
 
 interface PhotosContextValue {
   photos: Photo[];

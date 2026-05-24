@@ -16,11 +16,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GridColumns, PhotoGrid } from "@/components/PhotoGrid";
 import { useAlbums } from "@/context/AlbumsContext";
-import { usePhotos } from "@/context/PhotosContext";
+import { DEFAULT_ADJUSTMENTS, PhotoAdjustments, usePhotos } from "@/context/PhotosContext";
 import { useColors } from "@/hooks/useColors";
 
 type SortOrder = "newest" | "oldest";
-type FilterMode = "all" | "favorites";
+type FilterMode = "all" | "favorites" | "picks" | "rejects";
 
 const LABEL_COLORS: Record<string, string> = {
   red: "#ff453a", orange: "#ff9f0a", yellow: "#ffd60a",
@@ -28,8 +28,19 @@ const LABEL_COLORS: Record<string, string> = {
 };
 const LABEL_KEYS = Object.keys(LABEL_COLORS);
 
+const BUILT_IN_PRESETS = [
+  { id: "bi_vivid",     name: "Vivid",     adjustments: { saturation: 25, vibrance: 20, contrast: 10, clarity: 15, dehaze: 8 } },
+  { id: "bi_matte",     name: "Matte",     adjustments: { blacks: 18, whites: -8, contrast: -20, shadows: 12, brightness: 5 } },
+  { id: "bi_bw",        name: "B&W",       adjustments: { saturation: -100, contrast: 10, clarity: 10 } },
+  { id: "bi_cinema",    name: "Cinema",    adjustments: { toneMapping: 25, contrast: 18, shadows: -15, tint: 8, vignette: 35, blacks: -8 } },
+  { id: "bi_warm",      name: "Warm",      adjustments: { warmth: 45, vibrance: 10 } },
+  { id: "bi_cool",      name: "Cool",      adjustments: { warmth: -35, tint: -10, vibrance: 8 } },
+  { id: "bi_landscape", name: "Landscape", adjustments: { dehaze: 20, saturation: 12, clarity: 18, shadows: 15, vibrance: 15 } },
+  { id: "bi_moody",     name: "Moody",     adjustments: { contrast: 22, shadows: -25, blacks: -12, vignette: 45, clarity: 12 } },
+];
+
 export default function LibraryScreen() {
-  const { photos, loading, deletePhotos } = usePhotos();
+  const { photos, loading, deletePhotos, updatePhoto } = usePhotos();
   const { albums, createAlbum, addPhotosToAlbum } = useAlbums();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -42,15 +53,17 @@ export default function LibraryScreen() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds,   setSelectedIds]   = useState<Set<string>>(new Set());
   const [showAlbumPicker, setShowAlbumPicker] = useState(false);
+  const [showBatchEdit,   setShowBatchEdit]   = useState(false);
   const [newAlbumName,    setNewAlbumName]    = useState("");
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const HEADER_HEIGHT = topInset + 120;
 
   const filteredPhotos = useMemo(() => {
-    let list = filterMode === "favorites"
-      ? photos.filter((p) => p.favorited)
-      : [...photos];
+    let list = [...photos];
+    if (filterMode === "favorites") list = list.filter((p) => p.favorited);
+    else if (filterMode === "picks")   list = list.filter((p) => p.flag === "pick");
+    else if (filterMode === "rejects") list = list.filter((p) => p.flag === "reject");
     if (minRating > 0) list = list.filter((p) => (p.rating ?? 0) >= minRating);
     if (labelFilter)   list = list.filter((p) => p.colorLabel === labelFilter);
     return sortOrder === "newest"
@@ -58,7 +71,9 @@ export default function LibraryScreen() {
       : list.sort((a, b) => a.timestamp - b.timestamp);
   }, [photos, sortOrder, filterMode, minRating, labelFilter]);
 
-  const favCount = useMemo(() => photos.filter((p) => p.favorited).length, [photos]);
+  const favCount    = useMemo(() => photos.filter((p) => p.favorited).length, [photos]);
+  const picksCount  = useMemo(() => photos.filter((p) => p.flag === "pick").length, [photos]);
+  const rejectsCount= useMemo(() => photos.filter((p) => p.flag === "reject").length, [photos]);
 
   const enterSelectionMode = useCallback((id: string) => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -112,6 +127,28 @@ export default function LibraryScreen() {
     setSelectedIds(new Set());
   }, [newAlbumName, createAlbum, addPhotosToAlbum, selectedIds]);
 
+  const handleBatchApplyPreset = useCallback(async (presetAdj: Partial<PhotoAdjustments>) => {
+    const ids = Array.from(selectedIds);
+    const merged: PhotoAdjustments = { ...DEFAULT_ADJUSTMENTS, ...presetAdj };
+    for (const pid of ids) {
+      await updatePhoto(pid, { adjustments: merged });
+    }
+    setShowBatchEdit(false);
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [selectedIds, updatePhoto]);
+
+  const handleFlagSelected = useCallback(async (flag: "pick" | "reject" | null) => {
+    const ids = Array.from(selectedIds);
+    for (const pid of ids) {
+      await updatePhoto(pid, { flag });
+    }
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [selectedIds, updatePhoto]);
+
   const toggleSort    = useCallback(() => setSortOrder((s) => (s === "newest" ? "oldest" : "newest")), []);
   const toggleColumns = useCallback(() => setColumns((c) => (c === 3 ? 2 : 3)), []);
   const toggleRating  = (r: number) => setMinRating((prev) => (prev === r ? 0 : r));
@@ -130,18 +167,29 @@ export default function LibraryScreen() {
             <Text style={[styles.selectionTitle, { color: colors.foreground }]}>
               {selectedIds.size === 0 ? "Select Photos" : `${selectedIds.size} Selected`}
             </Text>
-            <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+            <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
               {selectedIds.size > 0 && (
-                <Pressable onPress={() => setShowAlbumPicker(true)} hitSlop={8}>
-                  <Feather name="folder-plus" size={20} color={colors.primary} />
-                </Pressable>
+                <>
+                  <Pressable onPress={() => setShowBatchEdit(true)} hitSlop={8} style={{ padding: 4 }}>
+                    <Feather name="sliders" size={19} color={colors.primary} />
+                  </Pressable>
+                  <Pressable onPress={() => handleFlagSelected("pick")} hitSlop={8} style={{ padding: 4 }}>
+                    <Feather name="check-circle" size={19} color="#30d158" />
+                  </Pressable>
+                  <Pressable onPress={() => handleFlagSelected("reject")} hitSlop={8} style={{ padding: 4 }}>
+                    <Feather name="x-circle" size={19} color="#ff453a" />
+                  </Pressable>
+                  <Pressable onPress={() => setShowAlbumPicker(true)} hitSlop={8}>
+                    <Feather name="folder-plus" size={19} color={colors.primary} />
+                  </Pressable>
+                </>
               )}
               <Pressable
                 onPress={selectedIds.size > 0 ? handleDeleteSelected : undefined}
                 style={({ pressed }) => ({ opacity: selectedIds.size === 0 ? 0.3 : pressed ? 0.6 : 1 })}
                 hitSlop={8}
               >
-                <Feather name="trash-2" size={20} color={colors.destructive} />
+                <Feather name="trash-2" size={19} color={colors.destructive} />
               </Pressable>
             </View>
           </View>
@@ -189,6 +237,30 @@ export default function LibraryScreen() {
                   Favorites  {favCount}
                 </Text>
               </Pressable>
+
+              {picksCount > 0 || filterMode === "picks" ? (
+                <Pressable
+                  onPress={() => setFilterMode((f) => (f === "picks" ? "all" : "picks"))}
+                  style={[styles.filterChip, { backgroundColor: filterMode === "picks" ? "#30d158" : colors.secondary }]}
+                >
+                  <Feather name="check" size={12} color={filterMode === "picks" ? "#fff" : colors.mutedForeground} />
+                  <Text style={[styles.filterChipText, { color: filterMode === "picks" ? "#fff" : colors.mutedForeground }]}>
+                    Picks  {picksCount}
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {rejectsCount > 0 || filterMode === "rejects" ? (
+                <Pressable
+                  onPress={() => setFilterMode((f) => (f === "rejects" ? "all" : "rejects"))}
+                  style={[styles.filterChip, { backgroundColor: filterMode === "rejects" ? "#ff453a" : colors.secondary }]}
+                >
+                  <Feather name="x" size={12} color={filterMode === "rejects" ? "#fff" : colors.mutedForeground} />
+                  <Text style={[styles.filterChipText, { color: filterMode === "rejects" ? "#fff" : colors.mutedForeground }]}>
+                    Rejects  {rejectsCount}
+                  </Text>
+                </Pressable>
+              ) : null}
 
               {[1, 2, 3, 4, 5].map((r) => (
                 <Pressable
@@ -242,7 +314,6 @@ export default function LibraryScreen() {
                 <Feather name="x" size={20} color={colors.mutedForeground} />
               </Pressable>
             </View>
-
             <View style={styles.newAlbumRow}>
               <TextInput
                 style={[styles.newAlbumInput, { color: colors.foreground, borderColor: colors.border }]}
@@ -258,7 +329,6 @@ export default function LibraryScreen() {
                 <Text style={styles.newAlbumBtnText}>Create</Text>
               </Pressable>
             </View>
-
             <ScrollView style={{ maxHeight: 260 }}>
               {albums.length === 0 && (
                 <Text style={[styles.emptyAlbums, { color: colors.mutedForeground }]}>No albums yet. Create one above.</Text>
@@ -276,6 +346,54 @@ export default function LibraryScreen() {
                   </Text>
                 </Pressable>
               ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Batch Edit Modal ── */}
+      <Modal visible={showBatchEdit} transparent animationType="slide" onRequestClose={() => setShowBatchEdit(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                Batch Edit — {selectedIds.size} Photos
+              </Text>
+              <Pressable onPress={() => setShowBatchEdit(false)} hitSlop={8}>
+                <Feather name="x" size={20} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <Text style={[styles.batchHint, { color: colors.mutedForeground }]}>
+              Apply a preset to all {selectedIds.size} selected photos at once.
+            </Text>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {BUILT_IN_PRESETS.map((preset) => (
+                <Pressable
+                  key={preset.id}
+                  onPress={() => handleBatchApplyPreset(preset.adjustments)}
+                  style={({ pressed }) => [styles.batchPresetRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <View style={styles.batchPresetSwatch} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.batchPresetName, { color: colors.foreground }]}>{preset.name}</Text>
+                    <Text style={[styles.batchPresetDesc, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {Object.entries(preset.adjustments).map(([k, v]) => `${k}: ${v > 0 ? "+" : ""}${v}`).join(" · ")}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                </Pressable>
+              ))}
+              <Pressable
+                onPress={() => handleBatchApplyPreset({ exposure: 0, brightness: 5, contrast: 12, highlights: -20, shadows: 20, whites: 8, blacks: -8, vibrance: 12, clarity: 8, dehaze: 5 })}
+                style={({ pressed }) => [styles.batchPresetRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <View style={[styles.batchPresetSwatch, { backgroundColor: "#a78bfa22", borderColor: "#a78bfa" }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.batchPresetName, { color: "#a78bfa" }]}>AI Enhance (All)</Text>
+                  <Text style={[styles.batchPresetDesc, { color: colors.mutedForeground }]}>Smart auto-tone for every selected photo</Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+              </Pressable>
             </ScrollView>
           </View>
         </View>
@@ -303,7 +421,7 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 16, fontFamily: "Inter_400Regular" },
   modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
   modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 16, paddingBottom: 40 },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 16 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 12 },
   modalTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   newAlbumRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20, marginBottom: 12 },
   newAlbumInput: { flex: 1, height: 40, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 14, fontFamily: "Inter_400Regular" },
@@ -313,4 +431,9 @@ const styles = StyleSheet.create({
   albumRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   albumRowName: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium" },
   albumRowCount: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  batchHint: { fontSize: 13, fontFamily: "Inter_400Regular", paddingHorizontal: 20, marginBottom: 8 },
+  batchPresetRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  batchPresetSwatch: { width: 36, height: 36, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.15)" },
+  batchPresetName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  batchPresetDesc: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
 });

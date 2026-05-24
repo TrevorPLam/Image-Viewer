@@ -60,6 +60,9 @@ export function buildPhotoStyle(adj?: PhotoAdjustments): object {
     gradingShadowsSat = 0, gradingMidtonesSat = 0, gradingHighlightsSat = 0,
     gradingShadowsLum = 0, gradingMidtonesLum = 0, gradingHighlightsLum = 0,
     hsl, curves, lutName = "none",
+    perspectiveV = 0, perspectiveH = 0,
+    lensDistortion = 0,
+    aiDenoise = 0, skinSmoothing = 0,
   } = adj;
 
   const lut = LUT_DEFS[lutName] ?? LUT_DEFS.none;
@@ -133,10 +136,25 @@ export function buildPhotoStyle(adj?: PhotoAdjustments): object {
     lut.h
   ).toFixed(2);
 
-  const blurPx = +(noiseReduction * 0.015).toFixed(3);
+  const totalBlurPx = +(noiseReduction * 0.015 + aiDenoise * 0.012 + skinSmoothing * 0.008).toFixed(3);
 
   const totalRotation = (rotation || 0) + (freeRotate || 0);
   const transforms: object[] = [];
+
+  // §1 Perspective correction
+  if (Math.abs(perspectiveV) > 0.5 || Math.abs(perspectiveH) > 0.5) {
+    if (Platform.OS === "web") {
+      // handled via CSS perspective in filter string
+    } else {
+      if (Math.abs(perspectiveV) > 0.5) transforms.push({ perspective: 800 }, { rotateX: `${perspectiveV * 0.25}deg` });
+      if (Math.abs(perspectiveH) > 0.5) transforms.push({ perspective: 800 }, { rotateY: `${perspectiveH * 0.25}deg` });
+    }
+  }
+
+  // §1 Lens distortion (approximate barrel/pincushion via scale)
+  const distortScale = 1 + lensDistortion * 0.003;
+  if (Math.abs(lensDistortion) > 0.5) transforms.push({ scale: distortScale });
+
   if (totalRotation) transforms.push({ rotate: `${totalRotation}deg` });
   if (flipH) transforms.push({ scaleX: -1 });
   if (flipV) transforms.push({ scaleY: -1 });
@@ -150,18 +168,29 @@ export function buildPhotoStyle(adj?: PhotoAdjustments): object {
       `contrast(${cFactor})`,
       `saturate(${sFactor})`,
     ];
-    if (blurPx > 0)           parts.push(`blur(${blurPx}px)`);
-    if (sepiaVal > 0)          parts.push(`sepia(${sepiaVal})`);
+    if (totalBlurPx > 0)        parts.push(`blur(${totalBlurPx}px)`);
+    if (sepiaVal > 0)           parts.push(`sepia(${sepiaVal})`);
     if (Math.abs(hueVal) > 0.1) parts.push(`hue-rotate(${hueVal}deg)`);
+
+    // Perspective via CSS transform
+    const cssParts: string[] = [];
+    if (Math.abs(perspectiveV) > 0.5) cssParts.push(`perspective(800px) rotateX(${perspectiveV * 0.25}deg)`);
+    if (Math.abs(perspectiveH) > 0.5) cssParts.push(`perspective(800px) rotateY(${perspectiveH * 0.25}deg)`);
+    if (Math.abs(lensDistortion) > 0.5) cssParts.push(`scale(${distortScale})`);
+    if (totalRotation) cssParts.push(`rotate(${totalRotation}deg)`);
+    if (flipH) cssParts.push(`scaleX(-1)`);
+    if (flipV) cssParts.push(`scaleY(-1)`);
+
     style.filter = parts.join(" ");
+    if (cssParts.length > 0) style.transform = cssParts.join(" ");
   } else {
     const filters: Array<Record<string, number>> = [
       { brightness: bFactor as unknown as number },
       { contrast: cFactor as unknown as number },
       { saturate: sFactor as unknown as number },
     ];
-    if (blurPx > 0)   filters.push({ blur: blurPx });
-    if (sepiaVal > 0) filters.push({ sepia: sepiaVal });
+    if (totalBlurPx > 0)   filters.push({ blur: totalBlurPx });
+    if (sepiaVal > 0)      filters.push({ sepia: sepiaVal });
     style.filter = filters;
   }
 
@@ -181,11 +210,15 @@ export function hasAdjustments(adj?: PhotoAdjustments): boolean {
     adj.splitShadowsHue ?? 0, adj.splitShadowsSat ?? 0,
     adj.levelsBlack ?? 0, adj.levelsMidtone ?? 0, adj.levelsWhite ?? 0,
     adj.gradingShadowsSat ?? 0, adj.gradingMidtonesSat ?? 0, adj.gradingHighlightsSat ?? 0,
+    adj.perspectiveV ?? 0, adj.perspectiveH ?? 0, adj.lensDistortion ?? 0,
+    adj.graduatedFilterStrength ?? 0, adj.radialFilterStrength ?? 0,
+    adj.aiDenoise ?? 0, adj.skinSmoothing ?? 0,
   ];
   return (
     nums.some((v) => v !== 0) ||
     adj.rotation !== 0 ||
     adj.flipH || adj.flipV ||
+    adj.chromaticAberration === true ||
     (adj.lutName && adj.lutName !== "none") ||
     (adj.curves?.rgb?.length ?? 2) > 2
   );

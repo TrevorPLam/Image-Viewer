@@ -41,6 +41,20 @@ const SMART_ALBUMS: SmartAlbum[] = [
     filter: (photos) => photos.filter((p) => p.favorited),
   },
   {
+    id: "_picks",
+    name: "Picks",
+    icon: "check-circle",
+    iconColor: "#30d158",
+    filter: (photos) => photos.filter((p) => p.flag === "pick"),
+  },
+  {
+    id: "_rejects",
+    name: "Rejects",
+    icon: "x-circle",
+    iconColor: "#ff453a",
+    filter: (photos) => photos.filter((p) => p.flag === "reject"),
+  },
+  {
     id: "_rated",
     name: "Rated",
     icon: "star",
@@ -71,8 +85,7 @@ const SMART_ALBUMS: SmartAlbum[] = [
       return photos.filter((p) => p.timestamp >= week);
     },
   },
-  {
-    id: "_red", name: "Red Label",   icon: "tag", iconColor: LABEL_COLORS.red,    filter: (p) => p.filter((ph) => ph.colorLabel === "red") },
+  { id: "_red",    name: "Red Label",    icon: "tag", iconColor: LABEL_COLORS.red,    filter: (p) => p.filter((ph) => ph.colorLabel === "red") },
   { id: "_orange", name: "Orange Label", icon: "tag", iconColor: LABEL_COLORS.orange, filter: (p) => p.filter((ph) => ph.colorLabel === "orange") },
   { id: "_green",  name: "Green Label",  icon: "tag", iconColor: LABEL_COLORS.green,  filter: (p) => p.filter((ph) => ph.colorLabel === "green") },
 ];
@@ -113,7 +126,7 @@ export default function AlbumsScreen() {
   const { photos } = usePhotos();
   const { albums, createAlbum, deleteAlbum } = useAlbums();
 
-  const [showCreate,  setShowCreate]  = useState(false);
+  const [showCreate,   setShowCreate]   = useState(false);
   const [newAlbumName, setNewAlbumName] = useState("");
   const [creating, setCreating] = useState(false);
 

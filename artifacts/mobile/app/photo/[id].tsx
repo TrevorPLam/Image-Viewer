@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Photo, usePhotos } from "@/context/PhotosContext";
+import { FlagStatus, Photo, usePhotos } from "@/context/PhotosContext";
 import { useColors } from "@/hooks/useColors";
 import { buildPhotoStyle } from "@/utils/photoStyle";
 
@@ -49,7 +49,6 @@ function StarRating({ rating, onChange }: { rating: number; onChange: (v: number
             name="star"
             size={22}
             color={star <= rating ? "#ffd60a" : "rgba(255,255,255,0.25)"}
-            style={star <= rating ? rSt.starFilled : undefined}
           />
         </Pressable>
       ))}
@@ -59,7 +58,82 @@ function StarRating({ rating, onChange }: { rating: number; onChange: (v: number
 
 const rSt = StyleSheet.create({
   row: { flexDirection: "row", gap: 6, alignItems: "center" },
-  starFilled: {},
+});
+
+function FlagButton({ flag, onChange }: { flag: FlagStatus; onChange: (f: FlagStatus) => void }) {
+  return (
+    <View style={flagSt.row}>
+      <Pressable
+        onPress={() => onChange(flag === "pick" ? null : "pick")}
+        hitSlop={6}
+        style={[flagSt.btn, flag === "pick" && flagSt.pickActive]}
+      >
+        <Feather name="check" size={14} color={flag === "pick" ? "#fff" : "rgba(255,255,255,0.5)"} />
+        <Text style={[flagSt.label, flag === "pick" && { color: "#fff" }]}>Pick</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => onChange(flag === "reject" ? null : "reject")}
+        hitSlop={6}
+        style={[flagSt.btn, flag === "reject" && flagSt.rejectActive]}
+      >
+        <Feather name="x" size={14} color={flag === "reject" ? "#fff" : "rgba(255,255,255,0.5)"} />
+        <Text style={[flagSt.label, flag === "reject" && { color: "#fff" }]}>Reject</Text>
+      </Pressable>
+      {flag && (
+        <Pressable onPress={() => onChange(null)} hitSlop={8} style={flagSt.clearBtn}>
+          <Feather name="minus-circle" size={14} color="rgba(255,255,255,0.35)" />
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+const flagSt = StyleSheet.create({
+  row: { flexDirection: "row", gap: 8, alignItems: "center" },
+  btn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" },
+  label: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.5)" },
+  pickActive: { backgroundColor: "#30d158", borderColor: "#30d158" },
+  rejectActive: { backgroundColor: "#ff453a", borderColor: "#ff453a" },
+  clearBtn: { padding: 4 },
+});
+
+function ExifSection({ photo }: { photo: Photo }) {
+  const date = new Date(photo.timestamp);
+  const dateStr = date.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const timeStr = date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  const rows: { label: string; value: string }[] = [
+    { label: "Date", value: dateStr },
+    { label: "Time", value: timeStr },
+    { label: "Dimensions", value: photo.width && photo.height ? `${photo.width} × ${photo.height} px` : "Unknown" },
+    { label: "File Format", value: photo.uri.startsWith("data:") ? "Base64" : photo.uri.split(".").pop()?.toUpperCase() ?? "JPEG" },
+    { label: "Color Space", value: "sRGB" },
+    { label: "Rating", value: photo.rating ? `${photo.rating} / 5 ★` : "Unrated" },
+    { label: "Flag", value: photo.flag ? (photo.flag === "pick" ? "✓ Pick" : "✗ Reject") : "Unflagged" },
+    { label: "Color Label", value: photo.colorLabel ? photo.colorLabel.charAt(0).toUpperCase() + photo.colorLabel.slice(1) : "None" },
+    { label: "Tags", value: photo.tags && photo.tags.length > 0 ? photo.tags.join(", ") : "None" },
+    { label: "Edited", value: photo.adjustments ? "Yes" : "No" },
+  ];
+
+  return (
+    <View style={exifSt.wrap}>
+      <Text style={exifSt.sectionTitle}>EXIF & Metadata</Text>
+      {rows.map(({ label, value }) => (
+        <View key={label} style={exifSt.row}>
+          <Text style={exifSt.label}>{label}</Text>
+          <Text style={exifSt.value} numberOfLines={1}>{value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const exifSt = StyleSheet.create({
+  wrap: { paddingTop: 4 },
+  sectionTitle: { color: "rgba(255,255,255,0.3)", fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.06)" },
+  label: { color: "rgba(255,255,255,0.4)", fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 },
+  value: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontFamily: "Inter_400Regular", flex: 1, textAlign: "right" },
 });
 
 export default function PhotoDetailScreen() {
@@ -73,6 +147,7 @@ export default function PhotoDetailScreen() {
   const [currentId, setCurrentId] = useState(id ?? "");
   const [editingTags, setEditingTags] = useState(false);
   const [tagInput, setTagInput] = useState("");
+  const [showExif, setShowExif] = useState(false);
 
   const initialIndex = useMemo(
     () => Math.max(photos.findIndex((p) => p.id === id), 0),
@@ -109,7 +184,6 @@ export default function PhotoDetailScreen() {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       }
       await deletePhoto(currentId);
-
       if (photos.length <= 1) {
         if (router.canGoBack()) router.back();
         else router.replace("/");
@@ -121,9 +195,7 @@ export default function PhotoDetailScreen() {
         else router.replace("/");
       }
     };
-
     if (Platform.OS === "web") { doDelete(); return; }
-
     Alert.alert("Delete Photo", "This photo will be permanently deleted.", [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: doDelete },
@@ -164,6 +236,13 @@ export default function PhotoDetailScreen() {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     await updatePhoto(currentId, { rating });
+  };
+
+  const handleFlag = async (flag: FlagStatus) => {
+    if (Platform.OS !== "web") {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await updatePhoto(currentId, { flag });
   };
 
   const handleColorLabel = async (label: string | null) => {
@@ -232,8 +311,11 @@ export default function PhotoDetailScreen() {
   const rating = currentPhoto?.rating ?? 0;
   const colorLabel = currentPhoto?.colorLabel ?? null;
   const tags = currentPhoto?.tags ?? [];
+  const flag = currentPhoto?.flag ?? null;
 
   const activeLabel = COLOR_LABELS.find((l) => l.key === colorLabel);
+
+  const flagColor = flag === "pick" ? "#30d158" : flag === "reject" ? "#ff453a" : null;
 
   return (
     <View style={styles.container}>
@@ -278,6 +360,11 @@ export default function PhotoDetailScreen() {
               <Text style={styles.ratingBadgeText}>{rating}</Text>
             </View>
           )}
+          {flag && (
+            <View style={[styles.flagBadge, { backgroundColor: flagColor! }]}>
+              <Feather name={flag === "pick" ? "check" : "x"} size={10} color="#fff" />
+            </View>
+          )}
         </View>
 
         <View style={styles.topRight}>
@@ -317,6 +404,12 @@ export default function PhotoDetailScreen() {
             <View style={styles.metaRow}>
               <Text style={styles.metaLabel}>Rating</Text>
               <StarRating rating={rating} onChange={handleRating} />
+            </View>
+
+            {/* Flag / Pick Status */}
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Flag</Text>
+              <FlagButton flag={flag} onChange={handleFlag} />
             </View>
 
             {/* Color Label */}
@@ -373,6 +466,17 @@ export default function PhotoDetailScreen() {
                 )}
               </View>
             </View>
+
+            <View style={styles.divider} />
+
+            {/* EXIF Toggle */}
+            <Pressable onPress={() => setShowExif((v) => !v)} style={styles.exifToggle}>
+              <Feather name="info" size={14} color="rgba(255,255,255,0.4)" />
+              <Text style={styles.exifToggleLabel}>EXIF & Metadata</Text>
+              <Feather name={showExif ? "chevron-up" : "chevron-down"} size={14} color="rgba(255,255,255,0.4)" />
+            </Pressable>
+
+            {showExif && <ExifSection photo={currentPhoto} />}
           </ScrollView>
         </View>
       )}
@@ -404,6 +508,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6, paddingVertical: 2,
   },
   ratingBadgeText: { color: "#ffd60a", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  flagBadge: {
+    width: 18, height: 18, borderRadius: 9,
+    alignItems: "center", justifyContent: "center",
+  },
   topRight: { flexDirection: "row", gap: 4 },
   iconBtn: {
     width: 36, height: 36,
@@ -412,9 +520,9 @@ const styles = StyleSheet.create({
   },
   infoBar: {
     position: "absolute", bottom: 0, left: 0, right: 0,
-    backgroundColor: "rgba(0,0,0,0.8)",
+    backgroundColor: "rgba(0,0,0,0.85)",
     paddingHorizontal: 20, paddingTop: 16,
-    maxHeight: SCREEN_HEIGHT * 0.4,
+    maxHeight: SCREEN_HEIGHT * 0.55,
     borderTopLeftRadius: 16, borderTopRightRadius: 16,
   },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -447,4 +555,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", borderStyle: "dashed",
   },
   addTagLabel: { color: "rgba(255,255,255,0.4)", fontSize: 12, fontFamily: "Inter_400Regular" },
+  exifToggle: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingVertical: 8,
+  },
+  exifToggleLabel: { flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 13, fontFamily: "Inter_500Medium" },
 });
