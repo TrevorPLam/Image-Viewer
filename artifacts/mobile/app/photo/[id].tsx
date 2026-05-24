@@ -2,12 +2,15 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import React, { useCallback, useEffect, useRef, useMemo, useState } from "react";
 import {
   Alert,
   Dimensions,
   FlatList,
   ListRenderItemInfo,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -97,6 +100,69 @@ const flagSt = StyleSheet.create({
   clearBtn: { padding: 4 },
 });
 
+function ZoomModal({ uri, onClose }: { uri: string; onClose: () => void }) {
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const transX = useSharedValue(0);
+  const transY = useSharedValue(0);
+  const savedX = useSharedValue(0);
+  const savedY = useSharedValue(0);
+
+  const pinch = Gesture.Pinch()
+    .onUpdate((e) => { scale.value = Math.max(0.5, Math.min(savedScale.value * e.scale, 10)); })
+    .onEnd(() => {
+      savedScale.value = Math.max(1, Math.min(scale.value, 8));
+      scale.value = withSpring(savedScale.value);
+    });
+
+  const pan = Gesture.Pan()
+    .onUpdate((e) => {
+      if (savedScale.value > 1) {
+        transX.value = savedX.value + e.translationX;
+        transY.value = savedY.value + e.translationY;
+      }
+    })
+    .onEnd(() => { savedX.value = transX.value; savedY.value = transY.value; });
+
+  const doubleTap = Gesture.Tap().numberOfTaps(2).onEnd(() => {
+    if (scale.value > 1) {
+      scale.value = withSpring(1); savedScale.value = 1;
+      transX.value = withSpring(0); transY.value = withSpring(0);
+      savedX.value = 0; savedY.value = 0;
+    } else {
+      scale.value = withSpring(2.5); savedScale.value = 2.5;
+    }
+  });
+
+  const composed = Gesture.Simultaneous(Gesture.Race(pinch, pan), doubleTap);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }, { translateX: transX.value }, { translateY: transY.value }],
+  }));
+
+  return (
+    <Modal visible transparent onRequestClose={onClose} statusBarTranslucent>
+      <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <GestureDetector gesture={composed}>
+          <Animated.View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+            <Animated.View style={animStyle}>
+              <Image source={{ uri }} style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT }} contentFit="contain" />
+            </Animated.View>
+          </Animated.View>
+        </GestureDetector>
+        <Pressable
+          onPress={onClose}
+          style={{ position: "absolute", top: 56, right: 20, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 20, padding: 10 }}
+        >
+          <Feather name="x" size={22} color="#fff" />
+        </Pressable>
+        <Text style={{ position: "absolute", bottom: 56, left: 0, right: 0, textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 12, fontFamily: "Inter_400Regular" }}>
+          Pinch to zoom · Double-tap to reset
+        </Text>
+      </View>
+    </Modal>
+  );
+}
+
 function ExifSection({ photo }: { photo: Photo }) {
   const date = new Date(photo.timestamp);
   const dateStr = date.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -148,6 +214,9 @@ export default function PhotoDetailScreen() {
   const [editingTags, setEditingTags] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [showExif, setShowExif] = useState(false);
+  const [showZoom, setShowZoom] = useState(false);
+  const [editingCaption, setEditingCaption] = useState(false);
+  const [captionInput, setCaptionInput] = useState("");
 
   const initialIndex = useMemo(
     () => Math.max(photos.findIndex((p) => p.id === id), 0),
@@ -268,6 +337,12 @@ export default function PhotoDetailScreen() {
     await updatePhoto(currentId, { tags: next });
   };
 
+  const handleSaveCaption = async () => {
+    const trimmed = captionInput.trim();
+    await updatePhoto(currentId, { caption: trimmed || undefined });
+    setEditingCaption(false);
+  };
+
   useEffect(() => {
     if (!loading && photos.length === 0) {
       if (router.canGoBack()) router.back();
@@ -377,6 +452,9 @@ export default function PhotoDetailScreen() {
           <Pressable onPress={handleEdit} style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]} hitSlop={12}>
             <Feather name="sliders" size={20} color="#fff" />
           </Pressable>
+          <Pressable onPress={() => setShowZoom(true)} style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]} hitSlop={12}>
+            <Feather name="zoom-in" size={20} color="#fff" />
+          </Pressable>
           <Pressable onPress={handleDelete} style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]} hitSlop={12}>
             <Feather name="trash-2" size={20} color={colors.destructive} />
           </Pressable>
@@ -467,6 +545,38 @@ export default function PhotoDetailScreen() {
               </View>
             </View>
 
+            {/* Caption */}
+            <View style={styles.captionSection}>
+              <Text style={styles.metaLabel}>Caption</Text>
+              {editingCaption ? (
+                <View style={{ marginTop: 6 }}>
+                  <TextInput
+                    style={styles.captionInput}
+                    value={captionInput}
+                    onChangeText={setCaptionInput}
+                    placeholder="Add a caption…"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    multiline
+                    autoFocus
+                  />
+                  <View style={{ flexDirection: "row", gap: 12, justifyContent: "flex-end", marginTop: 6 }}>
+                    <Pressable onPress={() => setEditingCaption(false)}>
+                      <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Cancel</Text>
+                    </Pressable>
+                    <Pressable onPress={handleSaveCaption}>
+                      <Text style={{ color: "#0a84ff", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Save</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <Pressable onPress={() => { setCaptionInput(currentPhoto.caption ?? ""); setEditingCaption(true); }}>
+                  <Text style={[styles.captionText, { color: currentPhoto.caption ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.3)" }]}>
+                    {currentPhoto.caption || "Add a caption…"}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
             <View style={styles.divider} />
 
             {/* EXIF Toggle */}
@@ -479,6 +589,10 @@ export default function PhotoDetailScreen() {
             {showExif && <ExifSection photo={currentPhoto} />}
           </ScrollView>
         </View>
+      )}
+
+      {showZoom && currentPhoto && (
+        <ZoomModal uri={currentPhoto.uri} onClose={() => setShowZoom(false)} />
       )}
     </View>
   );
@@ -560,4 +674,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   exifToggleLabel: { flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 13, fontFamily: "Inter_500Medium" },
+  captionSection: { marginBottom: 12 },
+  captionInput: { backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 10, padding: 10, color: "#fff", fontSize: 13, fontFamily: "Inter_400Regular", minHeight: 60, marginTop: 4 },
+  captionText: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 4, lineHeight: 18 },
 });

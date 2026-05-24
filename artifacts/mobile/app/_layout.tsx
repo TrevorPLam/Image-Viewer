@@ -16,6 +16,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AlbumsProvider } from "@/context/AlbumsContext";
 import { PhotosProvider } from "@/context/PhotosContext";
+import { SettingsProvider } from "@/context/SettingsContext";
+import { AppLockScreen } from "@/components/AppLockScreen";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -36,6 +38,10 @@ function RootLayoutNav() {
       <Stack.Screen
         name="album/[id]"
         options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="slideshow"
+        options={{ headerShown: false, presentation: "fullScreenModal", animation: "fade" }}
       />
     </Stack>
   );
@@ -61,11 +67,14 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <PhotosProvider>
             <AlbumsProvider>
-              <GestureHandlerRootView>
-                <KeyboardProvider>
-                  <RootLayoutNav />
-                </KeyboardProvider>
-              </GestureHandlerRootView>
+              <SettingsProvider>
+                <GestureHandlerRootView>
+                  <KeyboardProvider>
+                    <RootLayoutNav />
+                    <AppLockScreen />
+                  </KeyboardProvider>
+                </GestureHandlerRootView>
+              </SettingsProvider>
             </AlbumsProvider>
           </PhotosProvider>
         </QueryClientProvider>

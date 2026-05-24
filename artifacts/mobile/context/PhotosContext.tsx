@@ -132,9 +132,11 @@ export interface Photo {
   colorLabel?: string | null;
   tags?: string[];
   flag?: FlagStatus;
+  caption?: string;
+  name?: string;
 }
 
-export type PhotoChanges = Partial<Pick<Photo, "adjustments" | "rating" | "colorLabel" | "tags" | "favorited" | "flag">>;
+export type PhotoChanges = Partial<Pick<Photo, "adjustments" | "rating" | "colorLabel" | "tags" | "favorited" | "flag" | "caption" | "name">>;
 
 interface PhotosContextValue {
   photos: Photo[];

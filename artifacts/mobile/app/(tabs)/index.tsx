@@ -1,5 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Alert,
@@ -44,6 +45,7 @@ export default function LibraryScreen() {
   const { albums, createAlbum, addPhotosToAlbum } = useAlbums();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const [sortOrder,     setSortOrder]     = useState<SortOrder>("newest");
   const [filterMode,    setFilterMode]    = useState<FilterMode>("all");
@@ -55,12 +57,28 @@ export default function LibraryScreen() {
   const [showAlbumPicker, setShowAlbumPicker] = useState(false);
   const [showBatchEdit,   setShowBatchEdit]   = useState(false);
   const [newAlbumName,    setNewAlbumName]    = useState("");
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renamePrefix,    setRenamePrefix]    = useState("");
+  const [showDuplicates,  setShowDuplicates]  = useState(false);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const HEADER_HEIGHT = topInset + 120;
 
+  const duplicateIds = useMemo(() => {
+    const sorted = [...photos].sort((a, b) => a.timestamp - b.timestamp);
+    const ids = new Set<string>();
+    for (let i = 0; i < sorted.length - 1; i++) {
+      if (Math.abs(sorted[i + 1].timestamp - sorted[i].timestamp) < 2000) {
+        ids.add(sorted[i].id);
+        ids.add(sorted[i + 1].id);
+      }
+    }
+    return ids;
+  }, [photos]);
+
   const filteredPhotos = useMemo(() => {
     let list = [...photos];
+    if (showDuplicates) list = list.filter((p) => duplicateIds.has(p.id));
     if (filterMode === "favorites") list = list.filter((p) => p.favorited);
     else if (filterMode === "picks")   list = list.filter((p) => p.flag === "pick");
     else if (filterMode === "rejects") list = list.filter((p) => p.flag === "reject");
@@ -69,7 +87,7 @@ export default function LibraryScreen() {
     return sortOrder === "newest"
       ? list.sort((a, b) => b.timestamp - a.timestamp)
       : list.sort((a, b) => a.timestamp - b.timestamp);
-  }, [photos, sortOrder, filterMode, minRating, labelFilter]);
+  }, [photos, sortOrder, filterMode, minRating, labelFilter, showDuplicates, duplicateIds]);
 
   const favCount    = useMemo(() => photos.filter((p) => p.favorited).length, [photos]);
   const picksCount  = useMemo(() => photos.filter((p) => p.flag === "pick").length, [photos]);
@@ -127,6 +145,20 @@ export default function LibraryScreen() {
     setSelectedIds(new Set());
   }, [newAlbumName, createAlbum, addPhotosToAlbum, selectedIds]);
 
+  const handleBatchRename = useCallback(async () => {
+    const prefix = renamePrefix.trim();
+    if (!prefix) return;
+    const ids = Array.from(selectedIds);
+    for (let i = 0; i < ids.length; i++) {
+      await updatePhoto(ids[i], { name: `${prefix} ${i + 1}` });
+    }
+    setShowRenameModal(false);
+    setRenamePrefix("");
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [selectedIds, renamePrefix, updatePhoto]);
+
   const handleBatchApplyPreset = useCallback(async (presetAdj: Partial<PhotoAdjustments>) => {
     const ids = Array.from(selectedIds);
     const merged: PhotoAdjustments = { ...DEFAULT_ADJUSTMENTS, ...presetAdj };
@@ -173,6 +205,9 @@ export default function LibraryScreen() {
                   <Pressable onPress={() => setShowBatchEdit(true)} hitSlop={8} style={{ padding: 4 }}>
                     <Feather name="sliders" size={19} color={colors.primary} />
                   </Pressable>
+                  <Pressable onPress={() => setShowRenameModal(true)} hitSlop={8} style={{ padding: 4 }}>
+                    <Feather name="type" size={19} color={colors.primary} />
+                  </Pressable>
                   <Pressable onPress={() => handleFlagSelected("pick")} hitSlop={8} style={{ padding: 4 }}>
                     <Feather name="check-circle" size={19} color="#30d158" />
                   </Pressable>
@@ -198,6 +233,13 @@ export default function LibraryScreen() {
             <View style={styles.headerRow}>
               <Text style={[styles.headerTitle, { color: colors.foreground }]}>Library</Text>
               <View style={styles.headerIcons}>
+                <Pressable
+                  onPress={() => filteredPhotos.length > 0 && router.push({ pathname: "/slideshow", params: { startId: filteredPhotos[0].id } })}
+                  style={({ pressed }) => [styles.iconBtn, { backgroundColor: colors.secondary, opacity: filteredPhotos.length === 0 ? 0.3 : pressed ? 0.7 : 1 }]}
+                  hitSlop={6}
+                >
+                  <Feather name="play" size={14} color={colors.foreground} />
+                </Pressable>
                 <Pressable
                   onPress={toggleColumns}
                   style={({ pressed }) => [styles.iconBtn, { backgroundColor: colors.secondary, opacity: pressed ? 0.7 : 1 }]}
@@ -283,6 +325,18 @@ export default function LibraryScreen() {
                   <View style={[styles.labelDot, { backgroundColor: labelFilter === lk ? "#fff" : LABEL_COLORS[lk] }]} />
                 </Pressable>
               ))}
+
+              {duplicateIds.size > 0 && (
+                <Pressable
+                  onPress={() => setShowDuplicates((v) => !v)}
+                  style={[styles.filterChip, { backgroundColor: showDuplicates ? "#ff9f0a" : colors.secondary }]}
+                >
+                  <Feather name="copy" size={12} color={showDuplicates ? "#fff" : colors.mutedForeground} />
+                  <Text style={[styles.filterChipText, { color: showDuplicates ? "#fff" : colors.mutedForeground }]}>
+                    Dupes  {duplicateIds.size}
+                  </Text>
+                </Pressable>
+              )}
             </ScrollView>
           </>
         )}
@@ -347,6 +401,42 @@ export default function LibraryScreen() {
                 </Pressable>
               ))}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Batch Rename Modal ── */}
+      <Modal visible={showRenameModal} transparent animationType="fade" onRequestClose={() => setShowRenameModal(false)}>
+        <View style={[styles.modalOverlay, { justifyContent: "center", paddingHorizontal: 24 }]}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card, borderRadius: 16, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24 }]}>
+            <Text style={[styles.modalTitle, { color: colors.foreground, marginBottom: 6 }]}>Batch Rename</Text>
+            <Text style={[styles.batchHint, { color: colors.mutedForeground, paddingHorizontal: 0, marginBottom: 14 }]}>
+              Renames {selectedIds.size} photo{selectedIds.size !== 1 ? "s" : ""} as "{renamePrefix || "Photo"} 1", "{renamePrefix || "Photo"} 2", etc.
+            </Text>
+            <TextInput
+              style={[styles.newAlbumInput, { color: colors.foreground, borderColor: colors.border, width: "100%", marginBottom: 16 }]}
+              placeholder="Photo name prefix…"
+              placeholderTextColor={colors.mutedForeground}
+              value={renamePrefix}
+              onChangeText={setRenamePrefix}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleBatchRename}
+            />
+            <View style={{ flexDirection: "row", gap: 10, justifyContent: "flex-end" }}>
+              <Pressable
+                onPress={() => setShowRenameModal(false)}
+                style={({ pressed }) => [styles.newAlbumBtn, { backgroundColor: colors.secondary, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[styles.newAlbumBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleBatchRename}
+                style={({ pressed }) => [styles.newAlbumBtn, { backgroundColor: colors.primary, opacity: renamePrefix.trim() ? (pressed ? 0.7 : 1) : 0.4 }]}
+              >
+                <Text style={styles.newAlbumBtnText}>Rename</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>

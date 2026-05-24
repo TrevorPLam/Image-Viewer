@@ -124,11 +124,12 @@ export default function AlbumsScreen() {
   const colors    = useColors();
   const insets    = useSafeAreaInsets();
   const { photos } = usePhotos();
-  const { albums, createAlbum, deleteAlbum } = useAlbums();
+  const { albums, createAlbum, deleteAlbum, reorderAlbum } = useAlbums();
 
   const [showCreate,   setShowCreate]   = useState(false);
   const [newAlbumName, setNewAlbumName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
@@ -168,13 +169,24 @@ export default function AlbumsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topInset }]}>
         <Text style={[styles.title, { color: colors.foreground }]}>Albums</Text>
-        <Pressable
-          onPress={() => setShowCreate(true)}
-          style={({ pressed }) => [styles.addBtn, { backgroundColor: colors.secondary, opacity: pressed ? 0.7 : 1 }]}
-          hitSlop={6}
-        >
-          <Feather name="plus" size={16} color={colors.foreground} />
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {albums.length > 1 && (
+            <Pressable
+              onPress={() => setReorderMode((v) => !v)}
+              style={({ pressed }) => [styles.addBtn, { backgroundColor: reorderMode ? colors.primary : colors.secondary, opacity: pressed ? 0.7 : 1 }]}
+              hitSlop={6}
+            >
+              <Feather name="list" size={16} color={reorderMode ? "#fff" : colors.foreground} />
+            </Pressable>
+          )}
+          <Pressable
+            onPress={() => setShowCreate(true)}
+            style={({ pressed }) => [styles.addBtn, { backgroundColor: colors.secondary, opacity: pressed ? 0.7 : 1 }]}
+            hitSlop={6}
+          >
+            <Feather name="plus" size={16} color={colors.foreground} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -215,7 +227,43 @@ export default function AlbumsScreen() {
               <Text style={styles.emptyBtnText}>Create Album</Text>
             </Pressable>
           </View>
-        ) : (
+        ) : reorderMode ? (
+            <View style={{ gap: 10 }}>
+              {userAlbumsWithCovers.map((album, idx) => (
+                <View key={album.id} style={[styles.reorderRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={[styles.reorderThumb, { backgroundColor: colors.secondary }]}>
+                    {album.cover ? (
+                      <Image source={{ uri: album.cover }} style={{ width: 44, height: 44, borderRadius: 10 }} contentFit="cover" />
+                    ) : (
+                      <Feather name="image" size={20} color={colors.mutedForeground} />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.tileName, { color: colors.foreground, marginTop: 0 }]} numberOfLines={1}>{album.name}</Text>
+                    <Text style={[styles.tileCount, { color: colors.mutedForeground }]}>{album.photoIds.length} photos</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 4 }}>
+                    <Pressable
+                      onPress={() => reorderAlbum(album.id, "up")}
+                      disabled={idx === 0}
+                      style={[styles.reorderBtn, { opacity: idx === 0 ? 0.25 : 1, backgroundColor: colors.secondary }]}
+                      hitSlop={6}
+                    >
+                      <Feather name="chevron-up" size={16} color={colors.foreground} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => reorderAlbum(album.id, "down")}
+                      disabled={idx === userAlbumsWithCovers.length - 1}
+                      style={[styles.reorderBtn, { opacity: idx === userAlbumsWithCovers.length - 1 ? 0.25 : 1, backgroundColor: colors.secondary }]}
+                      hitSlop={6}
+                    >
+                      <Feather name="chevron-down" size={16} color={colors.foreground} />
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
           <View style={styles.grid}>
             {userAlbumsWithCovers.map((album) => (
               <AlbumTile
@@ -280,6 +328,9 @@ const styles = StyleSheet.create({
   smartName: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
   smartCount: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   tile: { width: "47%" },
+  reorderRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, padding: 10, borderWidth: StyleSheet.hairlineWidth },
+  reorderThumb: { width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  reorderBtn: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   tileCover: { width: "100%", aspectRatio: 1, borderRadius: 12, alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative" },
   tileCoverImg: { width: "100%", height: "100%" },
   deleteBtn: { position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 10, width: 20, height: 20, alignItems: "center", justifyContent: "center" },

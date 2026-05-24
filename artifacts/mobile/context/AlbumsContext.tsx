@@ -24,6 +24,7 @@ interface AlbumsContextValue {
   renameAlbum: (id: string, name: string) => Promise<void>;
   addPhotosToAlbum: (albumId: string, photoIds: string[]) => Promise<void>;
   removePhotoFromAlbum: (albumId: string, photoId: string) => Promise<void>;
+  reorderAlbum: (id: string, direction: "up" | "down") => Promise<void>;
   loading: boolean;
 }
 
@@ -120,9 +121,25 @@ export function AlbumsProvider({ children }: { children: React.ReactNode }) {
     [persist]
   );
 
+  const reorderAlbum = useCallback(
+    async (id: string, direction: "up" | "down") => {
+      setAlbums((prev) => {
+        const idx = prev.findIndex((a) => a.id === id);
+        if (idx < 0) return prev;
+        const newIdx = direction === "up" ? idx - 1 : idx + 1;
+        if (newIdx < 0 || newIdx >= prev.length) return prev;
+        const next = [...prev];
+        [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+        persist(next);
+        return next;
+      });
+    },
+    [persist]
+  );
+
   return (
     <AlbumsContext.Provider
-      value={{ albums, createAlbum, deleteAlbum, renameAlbum, addPhotosToAlbum, removePhotoFromAlbum, loading }}
+      value={{ albums, createAlbum, deleteAlbum, renameAlbum, addPhotosToAlbum, removePhotoFromAlbum, reorderAlbum, loading }}
     >
       {children}
     </AlbumsContext.Provider>

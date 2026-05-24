@@ -1,7 +1,8 @@
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useRef, useState } from "react";
+import * as Haptics from "expo-haptics";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -86,6 +87,7 @@ function EditSlider({ label, value, min = -100, max = 100, onValueChange, accent
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e) => {
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         startXRef.current = e.nativeEvent.locationX;
         const x = Math.max(0, Math.min(e.nativeEvent.locationX, trackW));
         onValueChange(Math.round(min + (x / trackW) * (max - min)));
@@ -648,6 +650,72 @@ export default function EditScreen() {
   const [curveChannel, setCurveChannel] = useState<CurveChannel>("rgb");
   const [activeRetouchTool, setActiveRetouchTool] = useState<string | null>(null);
 
+  // ── Undo/Redo History ──
+  const adjRef = useRef<PhotoAdjustments>(adj);
+  adjRef.current = adj;
+  const historyRef = useRef<PhotoAdjustments[]>([{ ...DEFAULT_ADJUSTMENTS, ...photo?.adjustments }]);
+  const histIdxRef = useRef(0);
+  const pendingCommitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const pushHistory = useCallback(() => {
+    if (pendingCommitRef.current) { clearTimeout(pendingCommitRef.current); pendingCommitRef.current = null; }
+    const current = adjRef.current;
+    const stack = historyRef.current;
+    const idx = histIdxRef.current;
+    const trimmed = stack.slice(0, idx + 1);
+    const newStack = [...trimmed, { ...current }];
+    if (newStack.length > 20) newStack.shift();
+    historyRef.current = newStack;
+    histIdxRef.current = newStack.length - 1;
+    setCanUndo(histIdxRef.current > 0);
+    setCanRedo(false);
+  }, []);
+
+  const schedulePush = useCallback(() => {
+    if (pendingCommitRef.current) clearTimeout(pendingCommitRef.current);
+    pendingCommitRef.current = setTimeout(pushHistory, 600);
+  }, [pushHistory]);
+
+  const undo = useCallback(() => {
+    if (pendingCommitRef.current) { clearTimeout(pendingCommitRef.current); pendingCommitRef.current = null; }
+    const idx = histIdxRef.current;
+    if (idx > 0) {
+      histIdxRef.current = idx - 1;
+      setAdj({ ...historyRef.current[idx - 1] });
+      setCanUndo(idx - 1 > 0);
+      setCanRedo(true);
+    }
+  }, []);
+
+  const redo = useCallback(() => {
+    const idx = histIdxRef.current;
+    const stack = historyRef.current;
+    if (idx < stack.length - 1) {
+      histIdxRef.current = idx + 1;
+      setAdj({ ...stack[idx + 1] });
+      setCanUndo(true);
+      setCanRedo(idx + 1 < stack.length - 1);
+    }
+  }, []);
+
+  // ── Split Compare ──
+  const [splitMode, setSplitMode] = useState(false);
+  const splitStartRef = useRef(SW / 2);
+  const splitCurrentRef = useRef(SW / 2);
+  const [splitX, setSplitX] = useState(SW / 2);
+  const splitPan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => { splitStartRef.current = splitCurrentRef.current; },
+    onPanResponderMove: (_, gs) => {
+      const newX = Math.max(40, Math.min(SW - 40, splitStartRef.current + gs.dx));
+      splitCurrentRef.current = newX;
+      setSplitX(newX);
+    },
+  })).current;
+
   useEffect(() => {
     if (!loading && !photo) {
       if (router.canGoBack()) router.back();
@@ -663,7 +731,7 @@ export default function EditScreen() {
     );
   }
 
-  const n = (key: NumKey) => (v: number) => setAdj((a) => ({ ...a, [key]: v }));
+  const n = (key: NumKey) => (v: number) => { setAdj((a) => ({ ...a, [key]: v })); schedulePush(); };
 
   const rotateLeft  = () => setAdj((a) => ({ ...a, rotation: (((a.rotation - 90) % 360 + 360) % 360) as 0 | 90 | 180 | 270 }));
   const rotateRight = () => setAdj((a) => ({ ...a, rotation: ((a.rotation + 90) % 360) as 0 | 90 | 180 | 270 }));
@@ -800,7 +868,15 @@ export default function EditScreen() {
         <Pressable onPress={handleCancel} style={({ pressed }) => [st.hdrBtn, { opacity: pressed ? 0.6 : 1 }]} hitSlop={10}>
           <Text style={st.cancel}>Cancel</Text>
         </Pressable>
-        <Text style={st.title}>Edit Photo</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+          <Pressable onPress={undo} hitSlop={10} style={{ opacity: canUndo ? 1 : 0.25 }}>
+            <Feather name="rotate-ccw" size={16} color="rgba(255,255,255,0.85)" />
+          </Pressable>
+          <Text style={st.title}>Edit</Text>
+          <Pressable onPress={redo} hitSlop={10} style={{ opacity: canRedo ? 1 : 0.25 }}>
+            <Feather name="rotate-cw" size={16} color="rgba(255,255,255,0.85)" />
+          </Pressable>
+        </View>
         <Pressable onPress={handleDone} style={({ pressed }) => [st.hdrBtn, { opacity: pressed ? 0.6 : 1 }]} hitSlop={10}>
           <Text style={[st.done, { color: accent }]}>Done</Text>
         </Pressable>
@@ -808,7 +884,7 @@ export default function EditScreen() {
 
       {/* ── Photo Preview ── */}
       <View style={[st.preview, { height: PREVIEW_H }]}>
-        <View style={[{ flex: 1, overflow: "hidden" }, comparing ? {} : (photoStyle as object)]}>
+        <View style={[{ flex: 1, overflow: "hidden" }, (comparing || splitMode) ? {} : (photoStyle as object)]}>
           <Image source={{ uri: photo.uri }} style={{ width: SW, height: PREVIEW_H }} contentFit="contain" />
           {!comparing && <VignetteOverlay amount={adj.vignette} />}
           {!comparing && <GrainOverlay amount={adj.grain} />}
@@ -828,15 +904,48 @@ export default function EditScreen() {
           />
         )}
 
-        <Pressable
-          onPressIn={() => setComparing(true)}
-          onPressOut={() => setComparing(false)}
-          style={st.compareBtn}
-          hitSlop={8}
-        >
-          <Feather name={comparing ? "eye-off" : "eye"} size={15} color="rgba(255,255,255,0.85)" />
-          <Text style={st.compareTxt}>{comparing ? "Original" : "Compare"}</Text>
-        </Pressable>
+        {/* Split Compare Overlay */}
+        {splitMode && (
+          <View style={StyleSheet.absoluteFill} {...splitPan.panHandlers}>
+            <View style={{ position: "absolute", left: splitX, top: 0, right: 0, bottom: 0, overflow: "hidden" }}>
+              <View style={[{ position: "absolute", left: -splitX, width: SW, height: PREVIEW_H }, photoStyle as object]}>
+                <Image source={{ uri: photo.uri }} style={{ width: SW, height: PREVIEW_H }} contentFit="contain" />
+                <VignetteOverlay amount={adj.vignette} />
+                <GrainOverlay amount={adj.grain} />
+              </View>
+            </View>
+            <View style={{ position: "absolute", left: splitX - 1, top: 0, bottom: 0, width: 2, backgroundColor: "#fff" }} />
+            <View style={{ position: "absolute", left: splitX - 16, top: PREVIEW_H / 2 - 16, width: 32, height: 32, borderRadius: 16, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" }}>
+              <Feather name="more-vertical" size={13} color="#333" />
+            </View>
+            <View style={{ position: "absolute", top: 8, left: 10, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+              <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 }}>BEFORE</Text>
+            </View>
+            <View style={{ position: "absolute", top: 8, right: 10, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+              <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 }}>AFTER</Text>
+            </View>
+          </View>
+        )}
+
+        <View style={{ position: "absolute", bottom: 10, left: 12, flexDirection: "row", gap: 8 }}>
+          <Pressable
+            onPressIn={() => !splitMode && setComparing(true)}
+            onPressOut={() => !splitMode && setComparing(false)}
+            style={[st.compareBtn, comparing && !splitMode && { backgroundColor: "rgba(255,255,255,0.2)" }]}
+            hitSlop={8}
+          >
+            <Feather name={comparing && !splitMode ? "eye-off" : "eye"} size={15} color="rgba(255,255,255,0.85)" />
+            <Text style={st.compareTxt}>{comparing && !splitMode ? "Original" : "Compare"}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { setSplitMode((v) => !v); if (comparing) setComparing(false); }}
+            style={[st.compareBtn, splitMode && { backgroundColor: "rgba(10,132,255,0.5)" }]}
+            hitSlop={8}
+          >
+            <Feather name="columns" size={15} color="rgba(255,255,255,0.85)" />
+            <Text style={st.compareTxt}>Split</Text>
+          </Pressable>
+        </View>
 
         {tab === "transform" && (
           <View style={st.previewBtnsRight}>
