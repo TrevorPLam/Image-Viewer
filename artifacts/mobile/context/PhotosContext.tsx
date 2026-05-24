@@ -13,6 +13,7 @@ interface PhotosContextValue {
   photos: Photo[];
   addPhoto: (uri: string, width?: number, height?: number) => Promise<void>;
   deletePhoto: (id: string) => Promise<void>;
+  deletePhotos: (ids: string[]) => Promise<void>;
   loading: boolean;
 }
 
@@ -69,8 +70,20 @@ export function PhotosProvider({ children }: { children: React.ReactNode }) {
     [persist]
   );
 
+  const deletePhotos = useCallback(
+    async (ids: string[]) => {
+      const idSet = new Set(ids);
+      setPhotos((prev) => {
+        const next = prev.filter((p) => !idSet.has(p.id));
+        persist(next);
+        return next;
+      });
+    },
+    [persist]
+  );
+
   return (
-    <PhotosContext.Provider value={{ photos, addPhoto, deletePhoto, loading }}>
+    <PhotosContext.Provider value={{ photos, addPhoto, deletePhoto, deletePhotos, loading }}>
       {children}
     </PhotosContext.Provider>
   );

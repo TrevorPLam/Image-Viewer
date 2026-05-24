@@ -1,20 +1,24 @@
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
+import * as Sharing from "expo-sharing";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useRef, useMemo, useState } from "react";
 import {
   Alert,
   Dimensions,
+  FlatList,
+  ListRenderItemInfo,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
+  ViewToken,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { usePhotos } from "@/context/PhotosContext";
+import { Photo, usePhotos } from "@/context/PhotosContext";
 import { useColors } from "@/hooks/useColors";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -26,62 +30,141 @@ export default function PhotoDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
-  const photo = useMemo(() => photos.find((p) => p.id === id), [photos, id]);
-
   const [showInfo, setShowInfo] = useState(false);
+  const [currentId, setCurrentId] = useState(id ?? "");
+
+  const initialIndex = useMemo(
+    () => Math.max(photos.findIndex((p) => p.id === id), 0),
+    // Only compute once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const flatListRef = useRef<FlatList<Photo>>(null);
+
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems[0]?.item) {
+        setCurrentId((viewableItems[0].item as Photo).id);
+      }
+    },
+    []
+  );
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
+  const currentPhoto = useMemo(
+    () => photos.find((p) => p.id === currentId),
+    [photos, currentId]
+  );
+
+  const currentIndex = useMemo(
+    () => photos.findIndex((p) => p.id === currentId),
+    [photos, currentId]
+  );
 
   const handleDelete = () => {
+    const doDelete = async () => {
+      if (Platform.OS !== "web") {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+      await deletePhoto(currentId);
+
+      if (photos.length <= 1) {
+        router.back();
+      } else {
+        const nextIndex = Math.min(currentIndex, photos.length - 2);
+        const nextPhoto = photos.filter((p) => p.id !== currentId)[nextIndex];
+        if (nextPhoto) {
+          setCurrentId(nextPhoto.id);
+        } else {
+          router.back();
+        }
+      }
+    };
+
     if (Platform.OS === "web") {
-      deletePhoto(id ?? "");
-      router.back();
+      doDelete();
       return;
     }
+
     Alert.alert("Delete Photo", "This photo will be permanently deleted.", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          if (id) {
-            await deletePhoto(id);
-          }
-          router.back();
-        },
-      },
+      { text: "Delete", style: "destructive", onPress: doDelete },
     ]);
   };
 
-  if (!photo) {
-    return (
-      <View style={[styles.container, { backgroundColor: "#000" }]}>
-        <Text style={{ color: "#fff" }}>Photo not found</Text>
-      </View>
-    );
-  }
+  const handleShare = async () => {
+    if (!currentPhoto) return;
 
-  const topInset = Platform.OS === "web" ? 67 : insets.top;
+    if (Platform.OS === "web") {
+      if (navigator.share) {
+        try {
+          await navigator.share({ url: currentPhoto.uri });
+        } catch {}
+      }
+      return;
+    }
 
-  return (
-    <View style={[styles.container, { backgroundColor: "#000" }]}>
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(currentPhoto.uri, {
+        mimeType: "image/jpeg",
+        dialogTitle: "Share Photo",
+      });
+    }
+  };
+
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<Photo>) => (
       <Pressable
-        style={styles.imageContainer}
+        style={styles.slide}
         onPress={() => setShowInfo((v) => !v)}
+        delayLongPress={99999}
       >
         <Image
-          source={{ uri: photo.uri }}
+          source={{ uri: item.uri }}
           style={styles.image}
           contentFit="contain"
-          transition={150}
+          transition={100}
         />
       </Pressable>
+    ),
+    []
+  );
 
-      <View
-        style={[
-          styles.topBar,
-          { paddingTop: topInset + 8 },
-        ]}
-      >
+  const keyExtractor = useCallback((item: Photo) => item.id, []);
+
+  const topInset = Platform.OS === "web" ? 67 : insets.top;
+  const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
+
+  if (photos.length === 0) {
+    router.back();
+    return null;
+  }
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        ref={flatListRef}
+        data={photos}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        initialScrollIndex={initialIndex}
+        getItemLayout={(_, index) => ({
+          length: SCREEN_WIDTH,
+          offset: SCREEN_WIDTH * index,
+          index,
+        })}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        decelerationRate="fast"
+      />
+
+      <View style={[styles.topBar, { paddingTop: topInset + 8 }]}>
         <Pressable
           onPress={() => router.back()}
           style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
@@ -90,27 +173,40 @@ export default function PhotoDetailScreen() {
           <Feather name="chevron-left" size={28} color="#fff" />
         </Pressable>
 
-        <Pressable
-          onPress={handleDelete}
-          style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
-          hitSlop={12}
-        >
-          <Feather name="trash-2" size={22} color={colors.destructive} />
-        </Pressable>
+        <Text style={styles.counter}>
+          {currentIndex + 1} / {photos.length}
+        </Text>
+
+        <View style={styles.topRight}>
+          <Pressable
+            onPress={handleShare}
+            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={12}
+          >
+            <Feather name="share" size={20} color="#fff" />
+          </Pressable>
+          <Pressable
+            onPress={handleDelete}
+            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={12}
+          >
+            <Feather name="trash-2" size={20} color={colors.destructive} />
+          </Pressable>
+        </View>
       </View>
 
-      {showInfo && (
+      {showInfo && currentPhoto && (
         <View
           style={[
             styles.infoBar,
             {
-              backgroundColor: "rgba(0,0,0,0.75)",
-              paddingBottom: insets.bottom + 16,
+              backgroundColor: "rgba(0,0,0,0.72)",
+              paddingBottom: bottomInset + 16,
             },
           ]}
         >
           <Text style={styles.infoText}>
-            {new Date(photo.timestamp).toLocaleDateString("en-US", {
+            {new Date(currentPhoto.timestamp).toLocaleDateString("en-US", {
               weekday: "long",
               year: "numeric",
               month: "long",
@@ -118,7 +214,7 @@ export default function PhotoDetailScreen() {
             })}
           </Text>
           <Text style={styles.infoSubtext}>
-            {new Date(photo.timestamp).toLocaleTimeString("en-US", {
+            {new Date(currentPhoto.timestamp).toLocaleTimeString("en-US", {
               hour: "2-digit",
               minute: "2-digit",
             })}
@@ -134,8 +230,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
   },
-  imageContainer: {
-    flex: 1,
+  slide: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -151,15 +248,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingBottom: 12,
   },
+  counter: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+  },
+  topRight: {
+    flexDirection: "row",
+    gap: 6,
+  },
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 20,
+    borderRadius: 19,
     backgroundColor: "rgba(0,0,0,0.4)",
   },
   infoBar: {

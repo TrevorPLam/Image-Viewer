@@ -22,11 +22,14 @@ const TILE_SIZE = (SCREEN_WIDTH - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
 interface Props {
   photos: Photo[];
-  onAddPress: () => void;
   headerHeight: number;
+  selectionMode: boolean;
+  selectedIds: Set<string>;
+  onLongPress: (id: string) => void;
+  onToggleSelect: (id: string) => void;
 }
 
-function EmptyState({ onAddPress, colors }: { onAddPress: () => void; colors: ReturnType<typeof useColors> }) {
+function EmptyState({ colors }: { colors: ReturnType<typeof useColors> }) {
   return (
     <View style={[styles.empty, { backgroundColor: colors.background }]}>
       <Feather name="image" size={52} color={colors.mutedForeground} />
@@ -38,7 +41,14 @@ function EmptyState({ onAddPress, colors }: { onAddPress: () => void; colors: Re
   );
 }
 
-export function PhotoGrid({ photos, onAddPress, headerHeight }: Props) {
+export function PhotoGrid({
+  photos,
+  headerHeight,
+  selectionMode,
+  selectedIds,
+  onLongPress,
+  onToggleSelect,
+}: Props) {
   const colors = useColors();
   const router = useRouter();
 
@@ -46,30 +56,62 @@ export function PhotoGrid({ photos, onAddPress, headerHeight }: Props) {
     ({ item, index }: { item: Photo; index: number }) => {
       const col = index % NUM_COLUMNS;
       const marginLeft = col === 0 ? 0 : GAP;
+      const isSelected = selectedIds.has(item.id);
+
+      const handlePress = () => {
+        if (selectionMode) {
+          onToggleSelect(item.id);
+        } else {
+          router.push(`/photo/${item.id}`);
+        }
+      };
+
       return (
         <Pressable
-          onPress={() => router.push(`/photo/${item.id}`)}
+          onPress={handlePress}
+          onLongPress={() => onLongPress(item.id)}
+          delayLongPress={350}
           style={({ pressed }) => [
             styles.tile,
-            { marginLeft, opacity: pressed ? 0.85 : 1 },
+            { marginLeft, opacity: pressed && !selectionMode ? 0.82 : 1 },
           ]}
         >
           <Image
             source={{ uri: item.uri }}
-            style={styles.tileImage}
+            style={[
+              styles.tileImage,
+              selectionMode && !isSelected && styles.tileUnselected,
+            ]}
             contentFit="cover"
             transition={200}
           />
+
+          {selectionMode && (
+            <View style={styles.checkOverlay}>
+              <View
+                style={[
+                  styles.checkCircle,
+                  isSelected
+                    ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                    : { backgroundColor: "rgba(0,0,0,0.25)", borderColor: "rgba(255,255,255,0.9)" },
+                ]}
+              >
+                {isSelected && (
+                  <Feather name="check" size={13} color="#fff" />
+                )}
+              </View>
+            </View>
+          )}
         </Pressable>
       );
     },
-    [router]
+    [router, selectionMode, selectedIds, onLongPress, onToggleSelect, colors]
   );
 
   const keyExtractor = useCallback((item: Photo) => item.id, []);
 
   if (photos.length === 0) {
-    return <EmptyState onAddPress={onAddPress} colors={colors} />;
+    return <EmptyState colors={colors} />;
   }
 
   const bottomPad = Platform.OS === "web" ? 34 : 100;
@@ -86,7 +128,6 @@ export function PhotoGrid({ photos, onAddPress, headerHeight }: Props) {
         { paddingTop: headerHeight + 4, paddingBottom: bottomPad },
       ]}
       showsVerticalScrollIndicator={false}
-      scrollEnabled={!!photos.length}
     />
   );
 }
@@ -101,10 +142,27 @@ const styles = StyleSheet.create({
   tile: {
     width: TILE_SIZE,
     height: TILE_SIZE,
+    position: "relative",
   },
   tileImage: {
     width: TILE_SIZE,
     height: TILE_SIZE,
+  },
+  tileUnselected: {
+    opacity: 0.55,
+  },
+  checkOverlay: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
   },
   empty: {
     flex: 1,
@@ -113,14 +171,11 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 40,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 4,
-  },
   emptyTitle: {
     fontSize: 22,
     fontFamily: "Inter_600SemiBold",
     textAlign: "center",
+    marginTop: 4,
   },
   emptySubtitle: {
     fontSize: 15,
