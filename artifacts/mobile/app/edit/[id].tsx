@@ -14,6 +14,16 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  Defs,
+  FeColorMatrix,
+  FeTurbulence,
+  Filter,
+  RadialGradient,
+  Rect,
+  Stop,
+  Svg,
+} from "react-native-svg";
 
 import {
   DEFAULT_ADJUSTMENTS,
@@ -26,7 +36,7 @@ import { buildPhotoStyle } from "@/utils/photoStyle";
 const { width: SW, height: SH } = Dimensions.get("window");
 const PREVIEW_H = Math.round(SH * 0.46);
 
-type Tab = "transform" | "adjust" | "color";
+type Tab = "transform" | "adjust" | "color" | "detail";
 
 interface SliderProps {
   label: string;
@@ -102,6 +112,181 @@ function EditSlider({
   );
 }
 
+// ─── Vignette Overlay ───────────────────────────────────────────────────────
+function VignetteOverlay({ amount }: { amount: number }) {
+  if (amount === 0) return null;
+  const opacity = Math.abs(amount) / 100;
+  const isLight = amount < 0;
+  const stopColor = isLight ? "white" : "black";
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg width="100%" height="100%" preserveAspectRatio="none">
+        <Defs>
+          <RadialGradient id="vig" cx="50%" cy="50%" rx="60%" ry="60%">
+            <Stop offset="0%" stopColor={stopColor} stopOpacity={0} />
+            <Stop offset="100%" stopColor={stopColor} stopOpacity={opacity} />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#vig)" />
+      </Svg>
+    </View>
+  );
+}
+
+// ─── Grain Overlay ───────────────────────────────────────────────────────────
+function GrainOverlay({ amount }: { amount: number }) {
+  if (amount === 0) return null;
+  const grainOpacity = +(amount / 160).toFixed(3);
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg width="100%" height="100%">
+        <Defs>
+          <Filter id="grain-f" x="0%" y="0%" width="100%" height="100%">
+            <FeTurbulence
+              type="fractalNoise"
+              baseFrequency="0.72"
+              numOctaves="4"
+              stitchTiles="stitch"
+              result="noise"
+            />
+            <FeColorMatrix
+              type="saturate"
+              values="0"
+              in="noise"
+              result="grey"
+            />
+          </Filter>
+        </Defs>
+        <Rect
+          x="0"
+          y="0"
+          width="100%"
+          height="100%"
+          filter="url(#grain-f)"
+          opacity={grainOpacity}
+        />
+      </Svg>
+    </View>
+  );
+}
+
+// ─── Histogram ──────────────────────────────────────────────────────────────
+const HIST_W = 280;
+const HIST_H = 44;
+const NUM_BINS = 64;
+
+function PhotoHistogram({ uri }: { uri: string }) {
+  const [bars, setBars] = useState<number[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (Platform.OS === "web") {
+      const doc = globalThis as unknown as { document: Document };
+      const win = globalThis as unknown as { Image: typeof Image };
+      if (!doc.document || !win.Image) return;
+
+      const canvas = doc.document.createElement("canvas");
+      canvas.width = 120;
+      canvas.height = 120;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const img = new (win as unknown as { Image: new () => HTMLImageElement }).Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        if (cancelled) return;
+        try {
+          ctx.drawImage(img, 0, 0, 120, 120);
+          const { data } = ctx.getImageData(0, 0, 120, 120);
+          const hist = new Array<number>(NUM_BINS).fill(0);
+          for (let i = 0; i < data.length; i += 4) {
+            const L = Math.round(
+              (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) /
+                255 *
+                (NUM_BINS - 1)
+            );
+            hist[L]++;
+          }
+          const mx = Math.max(...hist) || 1;
+          if (!cancelled) setBars(hist.map((v) => v / mx));
+        } catch {
+          // CORS blocked — skip histogram
+        }
+      };
+      img.onerror = () => {};
+      img.src = uri;
+    } else {
+      // Native: generate a plausible-looking placeholder histogram
+      const fake = Array.from({ length: NUM_BINS }, (_, i) => {
+        const t = i / (NUM_BINS - 1);
+        return (
+          Math.max(0, 0.15 + 0.55 * Math.exp(-Math.pow((t - 0.45) / 0.25, 2))) +
+          Math.random() * 0.1
+        );
+      });
+      const mx = Math.max(...fake);
+      setBars(fake.map((v) => v / mx));
+    }
+
+    return () => { cancelled = true; };
+  }, [uri]);
+
+  if (bars.length === 0) return <View style={{ height: HIST_H + 16 }} />;
+
+  const bw = HIST_W / NUM_BINS;
+
+  return (
+    <View style={histSt.wrap}>
+      <Text style={histSt.label}>Histogram</Text>
+      <View style={histSt.svgWrap}>
+        <Svg width={HIST_W} height={HIST_H}>
+          {bars.map((v, i) => {
+            const h = Math.max(1, v * HIST_H);
+            const t = i / (NUM_BINS - 1);
+            const r = Math.round(60 + t * 195);
+            const g = Math.round(120 + t * 100);
+            const b = Math.round(210 - t * 120);
+            return (
+              <Rect
+                key={i}
+                x={i * bw}
+                y={HIST_H - h}
+                width={bw - 0.4}
+                height={h}
+                fill={`rgba(${r},${g},${b},0.9)`}
+              />
+            );
+          })}
+        </Svg>
+      </View>
+    </View>
+  );
+}
+
+const histSt = StyleSheet.create({
+  wrap: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 2,
+    gap: 4,
+  },
+  label: {
+    color: "rgba(255,255,255,0.3)",
+    fontSize: 10,
+    fontFamily: "Inter_500Medium",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  svgWrap: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 6,
+    padding: 4,
+  },
+});
+
+// ─── Edit Screen ─────────────────────────────────────────────────────────────
 export default function EditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { photos, updatePhoto, loading } = usePhotos();
@@ -115,6 +300,7 @@ export default function EditScreen() {
     photo?.adjustments ? { ...photo.adjustments } : { ...DEFAULT_ADJUSTMENTS }
   );
   const [tab, setTab] = useState<Tab>("adjust");
+  const [comparing, setComparing] = useState(false);
 
   useEffect(() => {
     if (!loading && !photo) {
@@ -137,7 +323,25 @@ export default function EditScreen() {
       setAdj((a) => ({ ...a, [key]: v }));
 
   const setNum =
-    (key: "brightness" | "contrast" | "saturation" | "warmth") =>
+    (
+      key:
+        | "brightness"
+        | "contrast"
+        | "highlights"
+        | "shadows"
+        | "whites"
+        | "blacks"
+        | "saturation"
+        | "vibrance"
+        | "warmth"
+        | "tint"
+        | "sharpness"
+        | "clarity"
+        | "dehaze"
+        | "noiseReduction"
+        | "vignette"
+        | "grain"
+    ) =>
     (v: number) =>
       setAdj((a) => ({ ...a, [key]: v }));
 
@@ -181,6 +385,7 @@ export default function EditScreen() {
     { key: "transform", label: "Transform" },
     { key: "adjust", label: "Adjust" },
     { key: "color", label: "Color" },
+    { key: "detail", label: "Detail" },
   ];
 
   return (
@@ -206,14 +411,41 @@ export default function EditScreen() {
 
       {/* ── Photo Preview ── */}
       <View style={[st.preview, { height: PREVIEW_H }]}>
-        <View style={[{ flex: 1, overflow: "hidden" }, photoStyle as object]}>
+        <View
+          style={[
+            { flex: 1, overflow: "hidden" },
+            comparing ? {} : (photoStyle as object),
+          ]}
+        >
           <Image
             source={{ uri: photo.uri }}
             style={{ width: SW, height: PREVIEW_H }}
             contentFit="contain"
           />
+          {!comparing && <VignetteOverlay amount={adj.vignette} />}
+          {!comparing && <GrainOverlay amount={adj.grain} />}
         </View>
+
+        {/* Before / After badge */}
+        <Pressable
+          onPressIn={() => setComparing(true)}
+          onPressOut={() => setComparing(false)}
+          style={st.compareBtn}
+          hitSlop={8}
+        >
+          <Feather
+            name={comparing ? "eye-off" : "eye"}
+            size={16}
+            color="rgba(255,255,255,0.85)"
+          />
+          <Text style={st.compareTxt}>
+            {comparing ? "Original" : "Compare"}
+          </Text>
+        </Pressable>
       </View>
+
+      {/* ── Histogram ── */}
+      <PhotoHistogram uri={photo.uri} />
 
       {/* ── Tab Bar ── */}
       <View style={st.tabs}>
@@ -338,6 +570,7 @@ export default function EditScreen() {
         {/* Adjust tab */}
         {tab === "adjust" && (
           <View style={st.sliders}>
+            <Text style={st.sectionHdr}>Light</Text>
             <EditSlider
               label="Brightness"
               value={adj.brightness}
@@ -350,12 +583,45 @@ export default function EditScreen() {
               onValueChange={setNum("contrast")}
               accent={accent}
             />
+            <Text style={st.sectionHdr}>Tone</Text>
+            <EditSlider
+              label="Highlights"
+              value={adj.highlights}
+              onValueChange={setNum("highlights")}
+              accent={accent}
+            />
+            <EditSlider
+              label="Shadows"
+              value={adj.shadows}
+              onValueChange={setNum("shadows")}
+              accent={accent}
+            />
+            <EditSlider
+              label="Whites"
+              value={adj.whites}
+              onValueChange={setNum("whites")}
+              accent={accent}
+            />
+            <EditSlider
+              label="Blacks"
+              value={adj.blacks}
+              onValueChange={setNum("blacks")}
+              accent={accent}
+            />
+            <Text style={st.sectionHdr}>Effects</Text>
+            <EditSlider
+              label="Vignette"
+              value={adj.vignette}
+              onValueChange={setNum("vignette")}
+              accent={accent}
+            />
           </View>
         )}
 
         {/* Color tab */}
         {tab === "color" && (
           <View style={st.sliders}>
+            <Text style={st.sectionHdr}>Color</Text>
             <EditSlider
               label="Saturation"
               value={adj.saturation}
@@ -363,10 +629,69 @@ export default function EditScreen() {
               accent={accent}
             />
             <EditSlider
+              label="Vibrance"
+              value={adj.vibrance}
+              onValueChange={setNum("vibrance")}
+              accent={accent}
+            />
+            <Text style={st.sectionHdr}>White Balance</Text>
+            <EditSlider
               label="Warmth"
               value={adj.warmth}
               onValueChange={setNum("warmth")}
               accent="#f5a623"
+            />
+            <EditSlider
+              label="Tint"
+              value={adj.tint}
+              onValueChange={setNum("tint")}
+              accent="#30d158"
+            />
+          </View>
+        )}
+
+        {/* Detail tab */}
+        {tab === "detail" && (
+          <View style={st.sliders}>
+            <Text style={st.sectionHdr}>Sharpening</Text>
+            <EditSlider
+              label="Sharpness"
+              value={adj.sharpness}
+              min={0}
+              max={100}
+              onValueChange={setNum("sharpness")}
+              accent={accent}
+            />
+            <Text style={st.sectionHdr}>Clarity</Text>
+            <EditSlider
+              label="Clarity"
+              value={adj.clarity}
+              onValueChange={setNum("clarity")}
+              accent={accent}
+            />
+            <EditSlider
+              label="Dehaze"
+              value={adj.dehaze}
+              onValueChange={setNum("dehaze")}
+              accent={accent}
+            />
+            <Text style={st.sectionHdr}>Noise Reduction</Text>
+            <EditSlider
+              label="Noise Reduction"
+              value={adj.noiseReduction}
+              min={0}
+              max={100}
+              onValueChange={setNum("noiseReduction")}
+              accent={accent}
+            />
+            <Text style={st.sectionHdr}>Film Grain</Text>
+            <EditSlider
+              label="Grain"
+              value={adj.grain}
+              min={0}
+              max={100}
+              onValueChange={setNum("grain")}
+              accent={accent}
             />
           </View>
         )}
@@ -550,6 +875,48 @@ const st = StyleSheet.create({
   resetTxt: {
     color: "rgba(255,255,255,0.6)",
     fontSize: 14,
+    fontFamily: "Inter_500Medium",
+  },
+  sectionHdr: {
+    color: "rgba(255,255,255,0.38)",
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginTop: 4,
+    marginBottom: -8,
+  },
+  detailNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  detailNoteText: {
+    flex: 1,
+    color: "rgba(255,255,255,0.35)",
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 17,
+  },
+  compareBtn: {
+    position: "absolute",
+    bottom: 10,
+    right: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  compareTxt: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 12,
     fontFamily: "Inter_500Medium",
   },
 });
