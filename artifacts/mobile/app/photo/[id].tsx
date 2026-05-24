@@ -1,6 +1,5 @@
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import * as Sharing from "expo-sharing";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import React, { useCallback, useRef, useMemo, useState } from "react";
@@ -11,6 +10,7 @@ import {
   ListRenderItemInfo,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -95,13 +95,9 @@ export default function PhotoDetailScreen() {
       }
       return;
     }
-    const canShare = await Sharing.isAvailableAsync();
-    if (canShare) {
-      await Sharing.shareAsync(currentPhoto.uri, {
-        mimeType: "image/jpeg",
-        dialogTitle: "Share Photo",
-      });
-    }
+    try {
+      await Share.share({ url: currentPhoto.uri, message: currentPhoto.uri });
+    } catch {}
   };
 
   const handleToggleFavorite = async () => {
