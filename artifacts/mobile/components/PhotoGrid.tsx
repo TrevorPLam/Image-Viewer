@@ -14,6 +14,7 @@ import {
 
 import { Photo } from "@/context/PhotosContext";
 import { useColors } from "@/hooks/useColors";
+import { buildPhotoStyle, hasAdjustments } from "@/utils/photoStyle";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const GAP = 2;
@@ -61,6 +62,9 @@ export function PhotoGrid({
       const col = index % columns;
       const marginLeft = col === 0 ? 0 : GAP;
       const isSelected = selectedIds.has(item.id);
+      const photoStyle = hasAdjustments(item.adjustments)
+        ? buildPhotoStyle(item.adjustments)
+        : {};
 
       const handlePress = () => {
         if (selectionMode) {
@@ -80,15 +84,20 @@ export function PhotoGrid({
             { opacity: pressed && !selectionMode ? 0.82 : 1 },
           ]}
         >
-          <Image
-            source={{ uri: item.uri }}
+          <View
             style={[
-              { width: tileSize, height: tileSize },
+              { width: tileSize, height: tileSize, overflow: "hidden" },
               selectionMode && !isSelected && styles.tileUnselected,
+              photoStyle as object,
             ]}
-            contentFit="cover"
-            transition={150}
-          />
+          >
+            <Image
+              source={{ uri: item.uri }}
+              style={{ width: tileSize, height: tileSize }}
+              contentFit="cover"
+              transition={150}
+            />
+          </View>
 
           {item.favorited && !selectionMode && (
             <View style={styles.favBadge}>

@@ -1,0 +1,169 @@
+Of course. Here is a comprehensive and complete list of photo editing features and capabilities, organized logically from foundational adjustments to advanced professional tools.
+
+### ✂️ 1. Geometry & Composition (Transformations)
+
+These tools focus on changing the shape, perspective, and overall framing of an image.
+
+| Feature | Sub-Feature | Description |
+| :--- | :--- | :--- |
+| **Crop** | Manual Crop | Freely dragging the boundaries of the crop frame to remove unwanted edges of the image. |
+| | Aspect Ratio Crop | Applying or constraining to a specific ratio (e.g., 1:1 for Instagram, 16:9, 4:3) for various output formats. |
+| | Rule of Thirds Grid | Overlays a 3x3 grid, with adjustable visibility, to assist in composing the shot according to the rule of thirds. |
+| | Golden Ratio / Spiral | Overlays a golden-ratio-based grid or spiral for advanced compositional guidance. |
+| **Rotate & Flip** | Rotate | Turning the image clockwise or counterclockwise by 90-degree increments. |
+| | Flip | Creating a mirror image, either horizontally or vertically. |
+| | Free Rotate | Using a slider to rotate the image to any arbitrary angle. |
+| **Straighten** | Auto-Straighten | A one-click algorithm that analyzes the image and corrects its horizon line automatically. |
+| | Manual Angle | A slider for fine-tuning the rotation angle, measured in degrees or radians, to manually straighten a photo. |
+| **Perspective Correction (Keystone)** | Vertical Keystone | Corrects the "falling" effect of vertical lines (e.g., buildings leaning backward). |
+| | Horizontal Keystone | Corrects the leaning of horizontal lines. |
+| | Guided / Anchor Points | Setting two or more reference lines to guide the software’s automatic perspective correction algorithm. |
+| **Lens Correction** | Automatic Lens Profile | Selecting your specific camera and lens from a database to automatically correct its unique geometric distortions (barrel/pincushion). |
+| | Manual Distortion | A slider to manually adjust for barrel (convex) or pincushion (concave) distortion. |
+| | Chromatic Aberration | A check-box to remove the colored fringing (purple/green halos) caused by lens imperfections, usually along high-contrast edges. |
+| | Defringe | Targeted tools to manually select and remove the color of the fringe (typically purple or green) that remains. |
+| **Resize / Scale** | Resample / Resize | Changing the pixel dimensions (width & height) of the image, used for social media, printing, or display. |
+| | Up-Scaling | Increasing the image size, often leveraging AI to intelligently fill in new detail without causing blur or pixelation. |
+| | Down-Scaling | Reducing the pixel dimensions, often used to save storage space, ensure faster uploads, or fit specific display constraints. |
+
+### 🎨 2. Image & Exposure Adjustments (Global Tone)
+
+These are the primary tools for controlling the brightness and tonal range of the entire image.
+
+| Feature | Sub-Feature | Description |
+| :--- | :--- | :--- |
+| **Exposure** | Exposure | Controls the overall brightness of the image. Increasing it brightens all tones, decreasing it darkens all. |
+| **Brightness** | Brightness | A simpler control that adds a constant value to all pixels. Unlike exposure, it can easily clip highlights. |
+| **Contrast** | Contrast | Controls the difference in brightness between the lightest and darkest parts. Higher contrast makes whites whiter and blacks blacker. |
+| **Highlights** | Highlights | Selectively brightens or, more commonly, darkens the bright parts of the photo to recover detail. |
+| **Shadows** | Shadows | Selectively brightens the dark parts of an image to reveal detail that may be hidden. |
+| **Whites** | Whites | Sets the white point of the image. Increasing this brightens only the lightest pixels. |
+| **Blacks** | Blacks | Sets the black point of the image. Decreasing this darkens only the darkest pixels. |
+| **Histogram & Scopes** | Luminance Histogram | A graphical representation of the distribution of brightness values across the entire image, used to identify clipping. |
+| | RGB Parade | Displays the Red, Green, and Blue channels as three independent histograms side-by-side for precise color balancing. |
+| | Vectorscope | A circular graph showing the color saturation and hue of the entire image, essential for video and professional color grading. |
+| | Waveform Monitor | A display that shows the brightness of the image from left to right, providing a more detailed look at exposure across the frame. |
+| | Zebra Stripes | An exposure assist warning that overlays the image to clearly mark pixels that are overexposed (clipped). |
+
+### 🎨 3. Advanced Tonal & Lighting Controls (Selective / Curves)
+
+Once basic adjustments are understood, these tools provide finer, non-linear control over the tones.
+
+| Feature | Sub-Feature | Description |
+| :--- | :--- | :--- |
+| **Curves Tool** | RGB Curve | A graph mapping input to output brightness. Creating a "S" shape increases contrast, while bending different parts of the curve adjusts brightness for specific tonal ranges (e.g., lifting only the shadows). |
+| | Individual Channel Curves | Similar to the RGB curve, but applied to the Red, Green, or Blue channels independently for precise color correction. |
+| **Levels Tool** | Input Levels | Contains sliders for black point, mid-tones (gamma), and white point to redistribute the image's brightness values. |
+| | Output Levels | Controls the brightness of the darkest and lightest parts of the image, effectively reducing overall contrast. |
+| **Tone Mapping** | Tone Mapping | A dedicated tool that compresses a high dynamic range (HDR) image's luminosity into the standard dynamic range of a monitor or print while preserving local contrast and detail. |
+| **Local/Selective Adjustments** | Digital Graduated Filters | Simulates a physical graduated neutral density filter, allowing you to apply adjustments (e.g., darken the sky) along a linear gradient. |
+| | Radial / Circular Filters | Allows you to create an ellipse to isolate and apply adjustments to a portion of an image, such as brightening a subject's face. |
+
+### 🎨 4. Color Adjustments (Global & Selective)
+
+These tools allow you to modify color aspects, from basic mood changes to professional-grade grading.
+
+| Feature | Sub-Feature | Description |
+| :--- | :--- | :--- |
+| **White Balance** | Temperature (Kelvin) | Adjusts the warmth or coolness of the image (blue to yellow). Measured in Kelvin; lower values are cooler, higher are warmer. |
+| | Tint | Adjusts the green-magenta balance to correct color casts from fluorescent or other artificial light sources. |
+| | Eye-Dropper Picker | Click on a neutral (white or gray) object in the image to instantly set the correct white balance. |
+| | Presets | Specific settings for common lighting conditions, including Daylight, Cloudy, Shade, Tungsten, Fluorescent, and Flash. |
+| **Basic Color** | Saturation | Increases or decreases the intensity of *all* colors uniformly. High saturation can lead to garish, unnatural results. |
+| | Vibrance | A "smart" saturation tool that increases the intensity of the less-saturated colors while protecting skin tones. |
+| | Hue | A "global" hue adjustment, which would shift all colors in the image to another color in the spectrum, a less common but available tool. |
+| **Advanced Color Grading** | HSL (Hue, Saturation, Luminance) | A powerful panel that allows you to target specific color ranges (e.g., making the sky 'bluer' without making skin tones more yellow) and adjust their hue, saturation, or brightness individually. |
+| | Color Grading Wheels | A professional tool for adding a specific color hue to the Shadows, Midtones, or Highlights independently to create cinematic looks. |
+| | Look-Up Tables (LUTs) | Pre-calculated mathematical formulas that transform the color data of an image in a complex way. Often used as a starting point for a "look" or "style". |
+| | Split Toning | An older term for a simpler tool that allows you to add different color tones to the highlights and shadows of an image. |
+| **Color Replacement** | Color Replacement Brush | Paints over a specific color with a new, selected hue while preserving the texture and luminance of the original area. |
+
+### 🧠 5. Detail & Clarity (Sharpening & Noise)
+
+These tools refine the perception of detail, either by enhancing edges, adding texture, or reducing unwanted artifacts.
+
+| Feature | Sub-Feature | Description |
+| :--- | :--- | :--- |
+| **Sharpening** | Amount / Strength | Controls the intensity of the sharpening effect, which creates contrast along edges. |
+| | Radius | Determines how many pixels around an edge are affected by sharpening. |
+| | Detail / Masking | Controls how much sharpening affects fine versus coarse details, often with a masking slider to limit sharpening to edges only. |
+| **Noise Reduction** | Luminance Noise | Reduces the appearance of "grain" or speckled brightness variations caused by a high ISO. |
+| | Color Noise | Smooths out the random colored pixels (red, blue, green specks) that can appear in shadows at high ISO. |
+| | AI Denoise | A dedicated, AI-powered noise reduction module that analyzes the image to aggressively remove noise while intelligently reconstructing and preserving fine details. |
+| **Structure & Clarity** | Clarity / Structure | Increases contrast specifically in the mid-tones, adding a sense of "punch" or depth to the image without affecting the brightest and darkest parts. |
+| | Texture | A more targeted tool that enhances or smooths out medium-sized detail frequencies, making it excellent for skin or fabric. |
+| | Dehaze | A specialized slider that reduces the effect of atmospheric haze or fog, recovering contrast and color saturation. |
+| **Film Grain** | Film Grain | Adds a controlled amount of synthetic, analog-style grain to an image, often used to create a specific aesthetic or to mask the artifacts of heavy noise reduction. |
+
+### 🔧 6. Retouching & Object Removal (Pixel-Level Editing)
+
+These tools are used for cleaning up imperfections, removing distractions, and making precise, local corrections.
+
+| Feature | Sub-Feature | Description |
+| :--- | :--- | :--- |
+| **Automated Removal** | Remove Tool | A "spot removal" tool that selects an area and "guesses" the texture to fill it in; ideal for dust spots, pimples, and small objects. |
+| | Magic Eraser | An enhanced removal tool (like Google's Magic Eraser) that uses AI to identify and remove larger objects like power lines or people with a single click. |
+| | Red-Eye Reduction | A dedicated tool for automatically detecting and correcting the red reflection from a camera's flash in subjects' eyes. |
+| **Semi-Automated Healing** | Spot Healing Brush | You brush over an imperfection, and it automatically samples from the surrounding area to blend the blemish, excellent for skin work. |
+| | Patch Tool | You draw a selection around an object, then drag that selection to a "source" area. The tool then blends the texture from the source into the target area. |
+| **Manual Cloning** | Clone Stamp | A precise, manual tool that allows you to select a "source" point and paint that exact sample over a "destination" area. |
+| **Generative AI** | Generative Fill | An AI-powered tool where you select an area and type a text prompt (e.g., "a tropical beach"). The AI generates new, realistic image data to fill that selection. |
+| | Generative Expand / Outpainting | Similar to Generative Fill, but for extending the canvas size. You expand the crop, and the AI fills the new empty space with plausible content based on the original. |
+
+### 🔀 7. Layers & Masks (Non-Destructive Workflow)
+
+The professional's toolkit for non-destructive editing, allowing for complex composites and localized adjustments.
+
+| Feature | Sub-Feature | Description |
+| :--- | :--- | :--- |
+| **Layers** | Image Layer | A standard layer that contains pixel data. One image can be placed on top of another to build composites. |
+| | Adjustment Layer | A special layer that doesn't contain pixels, but rather instructions for altering the appearance of all layers below it (e.g., a "Curves" adjustment layer). |
+| | Blend Modes | Mathematical formulas that determine how a layer's pixels interact with the layer(s) beneath it. |
+| | Grouping Layers | Combining multiple layers into a folder structure, making it easier to move, mask, and manage complex compositions. |
+| **Common Blend Modes** | Normal | The default; the top layer simply covers the one below, based on its opacity setting. |
+| | Multiply | Darkens the image, useful for adding shadows. |
+| | Screen | Lightens the image, useful for highlights. |
+| | Overlay | Increases contrast, good for texturing. |
+| | Soft Light | A softer version of Overlay, good for dodging and burning. |
+| **Masks** | Brush Mask | An editable mask where you "paint" with black to hide and white to reveal an adjustment or layer, giving you pixel-perfect control. |
+| | Linear Gradient Mask | Allows an adjustment to fade in over a linear gradient, perfect for smooth transitions like a graduated filter. |
+| | Radial Gradient Mask | Allows an adjustment to be applied inside or outside of an adjustable circle or ellipse. |
+| | Luminosity Mask | A mask generated based on the brightness values of the image, allowing you to target specific tonal ranges for adjustment. |
+| | Color / Hue Mask | A mask generated based on the color values in the image, allowing you to target, for example, only the "blue" of the sky. |
+| | MaskAI | A one-click tool that uses AI to automatically generate a mask that perfectly selects a subject (e.g., a person, car, or animal) from the background. |
+
+### ⚡ 8. Efficiency & Automation (AI & Batch Operations)
+
+Designed to speed up workflows, from applying edits to many images at once to leveraging AI for complex tasks.
+
+| Feature | Sub-Feature | Description |
+| :--- | :--- | :--- |
+| **Batch Processing** | Batch Processing | Applies the same set of edits to multiple selected photos simultaneously, saving significant time when standardizing a collection. |
+| **Presets & Styles** | User-Defined Presets | Allows you to save your own custom series of adjustments (e.g., a specific crop + a certain contrast + a favorite filter) to apply to other photos with one click. |
+| | Import / Export Presets | A system for sharing your presets with other users, often with QR codes or downloadable files. |
+| **One-Click AI Fixes** | Auto Tone / Auto | A single click where the software analyzes the image and attempts to apply the "best" settings for contrast, exposure, and color. |
+| | AI Enhance | A more advanced version where the AI system may output a few different "looks" for the user to choose from. |
+| **AI Portrait** | Skin Smoothing / Blemish | Specifically targets human faces to remove skin imperfections, blemishes, and pimples automatically. |
+| | Face Relighting / Eye | AI can adjust the direction and intensity of light on a face, or selectively brighten and sharpen the eyes. |
+| **AI Composition** | Auto-Crop | The software analyzes the image and suggests a crop that follows composition "best practices" (e.g., rule of thirds). |
+
+### 🗂️ 9. Management & Metadata (Organization)
+
+Critical for anyone with a large photo collection, these features are for organizing, searching, and managing files.
+
+| Feature | Sub-Feature | Description |
+| :--- | :--- | :--- |
+| **Rating Systems** | Star Ratings | A standard system for ranking photos on a scale (usually 1-5 stars) to quickly filter for the best shots. |
+| | Flagging / Pick Status | A simple system that marks an image as "Picked," "Rejected," or "Unflagged." |
+| | Color Labels | Allows you to tag images with a specific color (e.g., Red for "Finish," Green for "Approved") for custom organizational workflows. |
+| **Taxonomy** | Keywords / Tags | Words or phrases added to an image's metadata to allow for text-based searching, like "birthday," "landscape," or "New York". |
+| | Hierarchical Keywords | An advanced system that allows keywords to be nested (e.g., "Places > USA > New York > Central Park") for more refined searching. |
+| **Built-in Data (Metadata)** | EXIF (Exchangeable) | The technical data automatically recorded by the camera (shutter speed, aperture, ISO, date/time, camera model, lens, focal length). |
+| | IPTC (International Press) | A standard for storing text-based information like creator name, captions, copyright, and usage rights. |
+| | XMP (Extensible Metadata) | A newer, more powerful metadata standard that can store nearly any kind of data, including editing history, adjustment settings, and face tags. |
+| | Geotagging | The process of adding location coordinates (latitude and longitude) to a photo's metadata, often automatically from a smartphone's GPS. |
+| **Organizational Tools** | Albums / Folders | The fundamental folders for grouping images, either by location (folders) or a virtual collection (album). |
+| | Smart Albums / Collections | Albums that automatically populate based on user-defined criteria, such as "All photos with 5 stars from 2025." |
+| | Face Recognition | An AI-driven process that scans a photo library to identify and group photos by the people in them for easy searching. |
+
+Would you like me to dive deeper into a specific category, or perhaps create a similar list for the top 5-10 most popular photo applications, comparing them feature-by-feature?

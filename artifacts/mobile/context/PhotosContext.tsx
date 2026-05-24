@@ -1,6 +1,26 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
+export interface PhotoAdjustments {
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  warmth: number;
+  rotation: 0 | 90 | 180 | 270;
+  flipH: boolean;
+  flipV: boolean;
+}
+
+export const DEFAULT_ADJUSTMENTS: PhotoAdjustments = {
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+  warmth: 0,
+  rotation: 0,
+  flipH: false,
+  flipV: false,
+};
+
 export interface Photo {
   id: string;
   uri: string;
@@ -8,6 +28,7 @@ export interface Photo {
   width?: number;
   height?: number;
   favorited?: boolean;
+  adjustments?: PhotoAdjustments;
 }
 
 interface PhotosContextValue {
@@ -16,6 +37,7 @@ interface PhotosContextValue {
   deletePhoto: (id: string) => Promise<void>;
   deletePhotos: (ids: string[]) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
+  updatePhoto: (id: string, changes: Partial<Pick<Photo, "adjustments">>) => Promise<void>;
   loading: boolean;
 }
 
@@ -63,7 +85,6 @@ export function PhotosProvider({ children }: { children: React.ReactNode }) {
 
         setPhotos(initial);
       } catch {
-        // ignore storage errors
       } finally {
         setLoading(false);
       }
@@ -129,9 +150,20 @@ export function PhotosProvider({ children }: { children: React.ReactNode }) {
     [persist]
   );
 
+  const updatePhoto = useCallback(
+    async (id: string, changes: Partial<Pick<Photo, "adjustments">>) => {
+      setPhotos((prev) => {
+        const next = prev.map((p) => (p.id === id ? { ...p, ...changes } : p));
+        persist(next);
+        return next;
+      });
+    },
+    [persist]
+  );
+
   return (
     <PhotosContext.Provider
-      value={{ photos, addPhoto, deletePhoto, deletePhotos, toggleFavorite, loading }}
+      value={{ photos, addPhoto, deletePhoto, deletePhotos, toggleFavorite, updatePhoto, loading }}
     >
       {children}
     </PhotosContext.Provider>

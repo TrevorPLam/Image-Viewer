@@ -32,6 +32,14 @@ function RootLayoutNav() {
           animation: "fade",
         }}
       />
+      <Stack.Screen
+        name="edit/[id]"
+        options={{
+          headerShown: false,
+          presentation: "fullScreenModal",
+          animation: "slide_from_bottom",
+        }}
+      />
     </Stack>
   );
 }

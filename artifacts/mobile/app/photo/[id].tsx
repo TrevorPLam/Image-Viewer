@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Photo, usePhotos } from "@/context/PhotosContext";
 import { useColors } from "@/hooks/useColors";
+import { buildPhotoStyle } from "@/utils/photoStyle";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -114,31 +115,37 @@ export default function PhotoDetailScreen() {
     await toggleFavorite(currentId);
   };
 
+  const handleEdit = () => {
+    router.push({ pathname: "/edit/[id]", params: { id: currentId } });
+  };
+
   useEffect(() => {
     if (!loading && photos.length === 0) {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace("/");
-      }
+      if (router.canGoBack()) router.back();
+      else router.replace("/");
     }
   }, [loading, photos.length, router]);
 
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<Photo>) => (
-      <Pressable
-        style={styles.slide}
-        onPress={() => setShowInfo((v) => !v)}
-        delayLongPress={99999}
-      >
-        <Image
-          source={{ uri: item.uri }}
-          style={styles.image}
-          contentFit="contain"
-          transition={100}
-        />
-      </Pressable>
-    ),
+    ({ item }: ListRenderItemInfo<Photo>) => {
+      const photoStyle = buildPhotoStyle(item.adjustments);
+      return (
+        <Pressable
+          style={styles.slide}
+          onPress={() => setShowInfo((v) => !v)}
+          delayLongPress={99999}
+        >
+          <View style={[styles.imageWrap, photoStyle as object]}>
+            <Image
+              source={{ uri: item.uri }}
+              style={styles.image}
+              contentFit="contain"
+              transition={100}
+            />
+          </View>
+        </Pressable>
+      );
+    },
     []
   );
 
@@ -207,6 +214,13 @@ export default function PhotoDetailScreen() {
             <Feather name="share" size={20} color="#fff" />
           </Pressable>
           <Pressable
+            onPress={handleEdit}
+            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={12}
+          >
+            <Feather name="sliders" size={20} color="#fff" />
+          </Pressable>
+          <Pressable
             onPress={handleDelete}
             style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
             hitSlop={12}
@@ -262,6 +276,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  imageWrap: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
   image: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
@@ -284,14 +302,14 @@ const styles = StyleSheet.create({
   },
   topRight: {
     flexDirection: "row",
-    gap: 6,
+    gap: 4,
   },
   iconBtn: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 19,
+    borderRadius: 18,
     backgroundColor: "rgba(0,0,0,0.4)",
   },
   infoBar: {
