@@ -2,7 +2,7 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import React, { useCallback, useRef, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useRef, useMemo, useState } from "react";
 import {
   Alert,
   Dimensions,
@@ -112,6 +112,16 @@ export default function PhotoDetailScreen() {
     await toggleFavorite(currentId);
   };
 
+  useEffect(() => {
+    if (photos.length === 0) {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/");
+      }
+    }
+  }, [photos.length, router]);
+
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Photo>) => (
       <Pressable
@@ -136,7 +146,6 @@ export default function PhotoDetailScreen() {
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
   if (photos.length === 0) {
-    router.back();
     return null;
   }
 
