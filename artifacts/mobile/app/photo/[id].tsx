@@ -25,7 +25,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function PhotoDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { photos, deletePhoto } = usePhotos();
+  const { photos, deletePhoto, toggleFavorite } = usePhotos();
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -35,7 +35,6 @@ export default function PhotoDetailScreen() {
 
   const initialIndex = useMemo(
     () => Math.max(photos.findIndex((p) => p.id === id), 0),
-    // Only compute once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
@@ -74,19 +73,13 @@ export default function PhotoDetailScreen() {
         router.back();
       } else {
         const nextIndex = Math.min(currentIndex, photos.length - 2);
-        const nextPhoto = photos.filter((p) => p.id !== currentId)[nextIndex];
-        if (nextPhoto) {
-          setCurrentId(nextPhoto.id);
-        } else {
-          router.back();
-        }
+        const next = photos.filter((p) => p.id !== currentId)[nextIndex];
+        if (next) setCurrentId(next.id);
+        else router.back();
       }
     };
 
-    if (Platform.OS === "web") {
-      doDelete();
-      return;
-    }
+    if (Platform.OS === "web") { doDelete(); return; }
 
     Alert.alert("Delete Photo", "This photo will be permanently deleted.", [
       { text: "Cancel", style: "cancel" },
@@ -96,16 +89,12 @@ export default function PhotoDetailScreen() {
 
   const handleShare = async () => {
     if (!currentPhoto) return;
-
     if (Platform.OS === "web") {
       if (navigator.share) {
-        try {
-          await navigator.share({ url: currentPhoto.uri });
-        } catch {}
+        try { await navigator.share({ url: currentPhoto.uri }); } catch {}
       }
       return;
     }
-
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
       await Sharing.shareAsync(currentPhoto.uri, {
@@ -113,6 +102,18 @@ export default function PhotoDetailScreen() {
         dialogTitle: "Share Photo",
       });
     }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!currentPhoto) return;
+    if (Platform.OS !== "web") {
+      await Haptics.impactAsync(
+        currentPhoto.favorited
+          ? Haptics.ImpactFeedbackStyle.Light
+          : Haptics.ImpactFeedbackStyle.Medium
+      );
+    }
+    await toggleFavorite(currentId);
   };
 
   const renderItem = useCallback(
@@ -142,6 +143,8 @@ export default function PhotoDetailScreen() {
     router.back();
     return null;
   }
+
+  const isFav = currentPhoto?.favorited ?? false;
 
   return (
     <View style={styles.container}>
@@ -179,6 +182,17 @@ export default function PhotoDetailScreen() {
 
         <View style={styles.topRight}>
           <Pressable
+            onPress={handleToggleFavorite}
+            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={12}
+          >
+            <Feather
+              name="heart"
+              size={20}
+              color={isFav ? "#ff2d55" : "#fff"}
+            />
+          </Pressable>
+          <Pressable
             onPress={handleShare}
             style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
             hitSlop={12}
@@ -205,14 +219,19 @@ export default function PhotoDetailScreen() {
             },
           ]}
         >
-          <Text style={styles.infoText}>
-            {new Date(currentPhoto.timestamp).toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </Text>
+          <View style={styles.infoRow}>
+            {isFav && (
+              <Feather name="heart" size={14} color="#ff2d55" />
+            )}
+            <Text style={styles.infoText}>
+              {new Date(currentPhoto.timestamp).toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </Text>
+          </View>
           <Text style={styles.infoSubtext}>
             {new Date(currentPhoto.timestamp).toLocaleTimeString("en-US", {
               hour: "2-digit",
@@ -276,6 +295,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     gap: 4,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   infoText: {
     color: "#fff",

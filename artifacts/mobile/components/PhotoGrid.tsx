@@ -16,13 +16,14 @@ import { Photo } from "@/context/PhotosContext";
 import { useColors } from "@/hooks/useColors";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const NUM_COLUMNS = 3;
 const GAP = 2;
-const TILE_SIZE = (SCREEN_WIDTH - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
+
+export type GridColumns = 2 | 3;
 
 interface Props {
   photos: Photo[];
   headerHeight: number;
+  columns: GridColumns;
   selectionMode: boolean;
   selectedIds: Set<string>;
   onLongPress: (id: string) => void;
@@ -44,6 +45,7 @@ function EmptyState({ colors }: { colors: ReturnType<typeof useColors> }) {
 export function PhotoGrid({
   photos,
   headerHeight,
+  columns,
   selectionMode,
   selectedIds,
   onLongPress,
@@ -52,9 +54,11 @@ export function PhotoGrid({
   const colors = useColors();
   const router = useRouter();
 
+  const tileSize = (SCREEN_WIDTH - GAP * (columns - 1)) / columns;
+
   const renderItem = useCallback(
     ({ item, index }: { item: Photo; index: number }) => {
-      const col = index % NUM_COLUMNS;
+      const col = index % columns;
       const marginLeft = col === 0 ? 0 : GAP;
       const isSelected = selectedIds.has(item.id);
 
@@ -72,19 +76,25 @@ export function PhotoGrid({
           onLongPress={() => onLongPress(item.id)}
           delayLongPress={350}
           style={({ pressed }) => [
-            styles.tile,
-            { marginLeft, opacity: pressed && !selectionMode ? 0.82 : 1 },
+            { width: tileSize, height: tileSize, marginLeft, position: "relative" as const },
+            { opacity: pressed && !selectionMode ? 0.82 : 1 },
           ]}
         >
           <Image
             source={{ uri: item.uri }}
             style={[
-              styles.tileImage,
+              { width: tileSize, height: tileSize },
               selectionMode && !isSelected && styles.tileUnselected,
             ]}
             contentFit="cover"
-            transition={200}
+            transition={150}
           />
+
+          {item.favorited && !selectionMode && (
+            <View style={styles.favBadge}>
+              <Feather name="heart" size={10} color="#fff" />
+            </View>
+          )}
 
           {selectionMode && (
             <View style={styles.checkOverlay}>
@@ -96,16 +106,14 @@ export function PhotoGrid({
                     : { backgroundColor: "rgba(0,0,0,0.25)", borderColor: "rgba(255,255,255,0.9)" },
                 ]}
               >
-                {isSelected && (
-                  <Feather name="check" size={13} color="#fff" />
-                )}
+                {isSelected && <Feather name="check" size={13} color="#fff" />}
               </View>
             </View>
           )}
         </Pressable>
       );
     },
-    [router, selectionMode, selectedIds, onLongPress, onToggleSelect, colors]
+    [router, selectionMode, selectedIds, onLongPress, onToggleSelect, colors, tileSize, columns]
   );
 
   const keyExtractor = useCallback((item: Photo) => item.id, []);
@@ -121,7 +129,8 @@ export function PhotoGrid({
       data={photos}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
-      numColumns={NUM_COLUMNS}
+      numColumns={columns}
+      key={`grid-${columns}`}
       columnWrapperStyle={styles.row}
       contentContainerStyle={[
         styles.list,
@@ -133,23 +142,19 @@ export function PhotoGrid({
 }
 
 const styles = StyleSheet.create({
-  list: {
-    gap: GAP,
-  },
-  row: {
-    gap: 0,
-  },
-  tile: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
-    position: "relative",
-  },
-  tileImage: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
-  },
-  tileUnselected: {
-    opacity: 0.55,
+  list: { gap: GAP },
+  row: { gap: 0 },
+  tileUnselected: { opacity: 0.55 },
+  favBadge: {
+    position: "absolute",
+    bottom: 5,
+    right: 5,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "rgba(255,45,85,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   checkOverlay: {
     position: "absolute",
