@@ -25,7 +25,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function PhotoDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { photos, deletePhoto, toggleFavorite } = usePhotos();
+  const { photos, loading, deletePhoto, toggleFavorite } = usePhotos();
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -70,12 +70,14 @@ export default function PhotoDetailScreen() {
       await deletePhoto(currentId);
 
       if (photos.length <= 1) {
-        router.back();
+        if (router.canGoBack()) router.back();
+        else router.replace("/");
       } else {
         const nextIndex = Math.min(currentIndex, photos.length - 2);
         const next = photos.filter((p) => p.id !== currentId)[nextIndex];
         if (next) setCurrentId(next.id);
-        else router.back();
+        else if (router.canGoBack()) router.back();
+        else router.replace("/");
       }
     };
 
@@ -113,14 +115,14 @@ export default function PhotoDetailScreen() {
   };
 
   useEffect(() => {
-    if (photos.length === 0) {
+    if (!loading && photos.length === 0) {
       if (router.canGoBack()) {
         router.back();
       } else {
         router.replace("/");
       }
     }
-  }, [photos.length, router]);
+  }, [loading, photos.length, router]);
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Photo>) => (
@@ -145,8 +147,8 @@ export default function PhotoDetailScreen() {
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
-  if (photos.length === 0) {
-    return null;
+  if (loading || photos.length === 0) {
+    return <View style={styles.container} />;
   }
 
   const isFav = currentPhoto?.favorited ?? false;
